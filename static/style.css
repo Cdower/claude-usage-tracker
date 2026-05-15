@@ -79,7 +79,7 @@ h2 {
   margin-bottom: 14px;
   color: var(--text);
 }
-.section-note { color: var(--muted); font-size: 12px; font-weight: 400; margin-left: 6px; }
+.section-note { color: var(--text); font-size: 13.5px; font-weight: 400; margin-left: 6px; }
 
 /* Web Usage Bars */
 .usage-bars { display: flex; flex-direction: column; gap: 12px; }
