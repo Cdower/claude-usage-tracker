@@ -100,6 +100,31 @@ async function loadSummary() {
   document.getElementById('monthTokens').textContent = fmt.tokens(m.tokens);
   document.getElementById('monthCost').textContent = fmt.usd(m.api_cost);
   document.getElementById('monthSessions').textContent = m.sessions ?? '—';
+
+  // Projected month-end card
+  const p = data.projected || {};
+  if (p.projected_api_cost != null) {
+    const proj = p.projected_api_cost;
+    const plan = p.plan_monthly_usd || 0;
+    const savings = p.projected_savings;
+
+    document.getElementById('projectedCost').textContent = fmt.usd(proj);
+
+    if (plan > 0) {
+      const sign = savings >= 0 ? '+' : '';
+      const color = savings >= 0 ? '#56cfa8' : '#e05c6b';
+      document.getElementById('projectedSavingsSub').innerHTML =
+        `projected API cost &nbsp;<span style="color:${color};font-weight:600">${sign}${fmt.usd(Math.abs(savings))} ${savings >= 0 ? 'saved' : 'over'} vs ${p.plan}</span>`;
+    } else {
+      document.getElementById('projectedSavingsSub').textContent = 'estimated API cost';
+    }
+
+    // Month progress bar
+    const pct = Math.min((p.fraction_elapsed || 0) * 100, 100);
+    document.getElementById('projectedBar').style.width = pct + '%';
+    document.getElementById('projectedDays').textContent =
+      `day ${Math.floor(p.days_elapsed)} of ${p.days_in_month}`;
+  }
 }
 
 // ── Plan Comparison ───────────────────────────────────────────────────────────
@@ -200,6 +225,37 @@ async function loadProjectChart() {
   });
 }
 
+// ── Usage Limits table ────────────────────────────────────────────────────────
+
+async function loadLimitsTable() {
+  const res = await fetch('/api/web-usage/latest');
+  if (!res.ok) return;
+  const data = await res.json();
+  const bars = data.bars || [];
+  if (!bars.length) return;
+
+  document.getElementById('limitsSection').style.display = '';
+  const tbody = document.getElementById('limitsTableBody');
+  tbody.innerHTML = '';
+
+  bars.forEach(bar => {
+    const pct = Math.min(bar.percentage || 0, 100);
+    const cls = pct >= 90 ? 'danger' : pct >= 70 ? 'warn' : '';
+    tbody.insertAdjacentHTML('beforeend', `
+      <tr>
+        <td>${bar.label}</td>
+        <td><span class="limit-pct ${cls}">${pct}%</span></td>
+        <td>
+          <div class="limit-bar-track">
+            <div class="limit-bar-fill ${cls}" style="width:${pct}%"></div>
+          </div>
+        </td>
+        <td class="limit-reset">${bar.resetInfo || '—'}</td>
+      </tr>
+    `);
+  });
+}
+
 // ── Plan badge + selector ─────────────────────────────────────────────────────
 
 const PLAN_LABELS = { Pro: 'Pro Plan', Max5: 'Max Plan (5×)', Max20: 'Max Plan (20×)' };
@@ -258,6 +314,7 @@ async function loadAll() {
     loadWebUsage(),
     loadSummary(),
     loadPlan(),
+    loadLimitsTable(),
     loadPlanComparison(),
     loadDailyCharts(),
     loadModelChart(),

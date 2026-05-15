@@ -155,10 +155,40 @@ def stats_summary():
         FROM sessions WHERE first_timestamp >= ?
     """, (month_start,)).fetchone()
 
+    # Projected full-month cost based on days elapsed
+    now = datetime.now()
+    days_in_month = (now.replace(month=now.month % 12 + 1, day=1) - timedelta(days=1)).day if now.month < 12 \
+                    else 31
+    days_elapsed = now.day + (now.hour / 24)
+    fraction = days_elapsed / days_in_month
+    monthly_cost = (monthly["api_cost"] or 0) if monthly else 0
+    projected_cost = (monthly_cost / fraction) if fraction > 0 else 0
+
+    plan_data = _get_setting("selected_plan")
+    detected_plan = None
+    if is_authenticated():
+        try:
+            usage = fetch_usage()
+            detected_plan = usage.get("detected_plan")
+        except Exception:
+            pass
+    active_plan = detected_plan or plan_data
+    plan_monthly = PLAN_DETAILS.get(active_plan, {}).get("monthly_usd", 0)
+    projected_savings = plan_monthly - projected_cost
+
     conn.close()
     return jsonify({
         "allTime": dict(totals) if totals else {},
         "thisMonth": dict(monthly) if monthly else {},
+        "projected": {
+            "days_elapsed": round(days_elapsed, 1),
+            "days_in_month": days_in_month,
+            "fraction_elapsed": round(fraction, 3),
+            "projected_api_cost": round(projected_cost, 2),
+            "plan_monthly_usd": plan_monthly,
+            "projected_savings": round(projected_savings, 2),
+            "plan": active_plan,
+        },
     })
 
 

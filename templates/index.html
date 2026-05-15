@@ -52,7 +52,39 @@
         <div class="card-value" id="planSavings">—</div>
         <div class="card-sub" id="planSavingsSub">vs. API pricing</div>
       </div>
+      <div class="card projected" id="projectedCard">
+        <div class="card-label">Projected Month-End</div>
+        <div class="card-value" id="projectedCost">—</div>
+        <div class="card-sub" id="projectedSavingsSub">estimated API cost</div>
+        <div class="projected-bar-wrap">
+          <div class="projected-bar-track">
+            <div id="projectedBar" class="projected-bar-fill"></div>
+          </div>
+          <span id="projectedDays" class="projected-days"></span>
+        </div>
+      </div>
     </div>
+  </section>
+
+  <!-- Usage Limits (from claude.ai API) -->
+  <section id="limitsSection" style="display:none">
+    <h2>Usage Limits <span class="section-note">current utilization from claude.ai</span></h2>
+    <div class="limits-note">
+      Anthropic does not expose absolute token limits via API — only utilization %.
+      Limits were doubled for Claude Code on May 6 2026 per
+      <a href="https://www.anthropic.com/news/higher-limits-spacex" target="_blank" rel="noopener">this announcement</a>.
+    </div>
+    <table class="limits-table">
+      <thead>
+        <tr>
+          <th>Window</th>
+          <th>Used</th>
+          <th>Progress</th>
+          <th>Resets</th>
+        </tr>
+      </thead>
+      <tbody id="limitsTableBody"></tbody>
+    </table>
   </section>
 
   <!-- Plan Comparison Table -->

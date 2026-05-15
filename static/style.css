@@ -174,6 +174,89 @@ footer {
   color: var(--muted);
 }
 
+/* Projected savings card */
+.card.projected {
+  border-color: var(--accent2);
+  background: linear-gradient(135deg, #1a1d27, #172a24);
+}
+.projected-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.projected-bar-track {
+  flex: 1;
+  height: 4px;
+  background: var(--surface2);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.projected-bar-fill {
+  height: 100%;
+  background: var(--accent2);
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+.projected-days {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Usage limits table */
+.limits-note {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+.limits-note a { color: var(--accent); text-decoration: none; }
+.limits-note a:hover { text-decoration: underline; }
+
+.limits-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.limits-table th {
+  text-align: left;
+  padding: 10px 16px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  background: var(--surface2);
+}
+.limits-table td {
+  padding: 11px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  vertical-align: middle;
+}
+.limits-table td:nth-child(3) { width: 180px; }
+.limit-bar-track {
+  height: 6px;
+  background: var(--surface2);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.limit-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+.limit-bar-fill.warn   { background: #e0a050; }
+.limit-bar-fill.danger { background: var(--danger); }
+.limit-pct { font-weight: 600; min-width: 38px; display: inline-block; }
+.limit-pct.warn   { color: #e0a050; }
+.limit-pct.danger { color: var(--danger); }
+.limit-reset { font-size: 11px; color: var(--muted); }
+
 /* Plan selector modal */
 .modal {
   position: fixed;
