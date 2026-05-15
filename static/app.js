@@ -322,6 +322,111 @@ document.querySelectorAll('.plan-option').forEach(btn => {
   });
 });
 
+// ── Billing History ───────────────────────────────────────────────────────────
+
+function fmtBillingDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function renderBillingPeriods(periods) {
+  const tbody = document.getElementById('billingTableBody');
+  tbody.innerHTML = '';
+
+  let totalTokens = 0, totalApiCost = 0, totalPlanCost = 0, totalSavings = 0;
+  let hasPaidComplete = false;
+
+  periods.forEach(p => {
+    const isFreePlan = p.period === 0;
+    const isCurrent  = p.end === null && p.period > 0;
+    const startStr   = p.start ? fmtBillingDate(p.start) : 'beginning';
+    const endStr     = p.end   ? fmtBillingDate(p.end)   : 'today';
+    const dateRange  = `${startStr} – ${endStr}`;
+
+    const savingsCell = isFreePlan
+      ? '—'
+      : isCurrent
+        ? '<span class="billing-ongoing">(ongoing)</span>'
+        : p.savings != null
+          ? `<span class="${p.savings >= 0 ? 'verdict-good' : 'verdict-bad'}">${fmt.usd(p.savings)}</span>`
+          : '—';
+
+    const planCostCell = p.plan_cost != null ? fmt.usd(p.plan_cost) : '—';
+
+    tbody.insertAdjacentHTML('beforeend', `
+      <tr>
+        <td>${p.label}</td>
+        <td style="color:var(--muted);font-size:12px">${dateRange}</td>
+        <td>${fmt.tokens(p.tokens)}</td>
+        <td>${fmt.usd(p.api_cost)}</td>
+        <td>${planCostCell}</td>
+        <td>${savingsCell}</td>
+      </tr>
+    `);
+
+    if (!isFreePlan && !isCurrent) {
+      totalTokens   += p.tokens    || 0;
+      totalApiCost  += p.api_cost  || 0;
+      totalPlanCost += p.plan_cost || 0;
+      totalSavings  += p.savings   || 0;
+      hasPaidComplete = true;
+    }
+  });
+
+  if (hasPaidComplete) {
+    tbody.insertAdjacentHTML('beforeend', `
+      <tr class="billing-totals-row">
+        <td>Total (paid)</td>
+        <td></td>
+        <td>${fmt.tokens(totalTokens)}</td>
+        <td>${fmt.usd(totalApiCost)}</td>
+        <td>${fmt.usd(totalPlanCost)}</td>
+        <td><span class="${totalSavings >= 0 ? 'verdict-good' : 'verdict-bad'}">${fmt.usd(totalSavings)}</span></td>
+      </tr>
+    `);
+  }
+}
+
+async function loadBillingPeriods() {
+  const settingRes = await fetch('/api/settings/billing-start-date').then(r => r.json());
+  const setup = document.getElementById('billingSetup');
+  const table = document.getElementById('billingTable');
+
+  if (!settingRes.billing_start_date) {
+    setup.style.display = '';
+    table.style.display = 'none';
+    return;
+  }
+
+  setup.style.display = 'none';
+  table.style.display = '';
+
+  document.getElementById('billingStartInput').value = settingRes.billing_start_date;
+
+  const periods = await fetch('/api/stats/billing-periods').then(r => r.json());
+  renderBillingPeriods(periods);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('billingStartSave').addEventListener('click', async () => {
+    const val = document.getElementById('billingStartInput').value;
+    if (!val) return;
+    const res = await fetch('/api/settings/billing-start-date', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: val }),
+    });
+    if (res.ok) loadBillingPeriods();
+  });
+
+  document.getElementById('billingEditLink').addEventListener('click', e => {
+    e.preventDefault();
+    document.getElementById('billingSetup').style.display = '';
+    document.getElementById('billingTable').style.display = 'none';
+  });
+});
+
 // ── Boot ─────────────────────────────────────────────────────────────────────
 
 async function loadAll() {
@@ -334,6 +439,7 @@ async function loadAll() {
     loadDailyCharts(),
     loadModelChart(),
     loadProjectChart(),
+    loadBillingPeriods(),
   ]);
 }
 
