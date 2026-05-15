@@ -128,15 +128,17 @@ async function loadSummary() {
 
     // Bar = projection confidence: how many of the 14-day window had active sessions
     const confidence = Math.min(((p.days_with_data || 0) / (p.window_days || 14)) * 100, 100);
+    const confidenceColor = confidence >= 50 ? 'var(--accent2)' : '#e0a050';
     const bar = document.getElementById('projectedBar');
     bar.style.width = confidence + '%';
-    bar.style.background = confidence >= 50 ? 'var(--accent2)' : '#e0a050';
+    bar.style.background = confidenceColor;
 
     const dayLabel = p.days_with_data === 1 ? 'day' : 'days';
-    document.getElementById('projectedDays').textContent =
-      p.days_with_data
-        ? `projection confidence: ${p.days_with_data} active ${dayLabel} of last ${p.window_days}`
-        : 'no data yet — sync to begin tracking';
+    const daysEl = document.getElementById('projectedDays');
+    daysEl.textContent = p.days_with_data
+      ? `projection confidence: ${p.days_with_data} active ${dayLabel} of last ${p.window_days}`
+      : 'no data yet — sync to begin tracking';
+    daysEl.style.color = confidenceColor;
   }
 }
 
