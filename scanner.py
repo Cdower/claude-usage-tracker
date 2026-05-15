@@ -16,14 +16,25 @@ DB_PATH = Path(__file__).parent / "usage.db"
 
 MODEL_PRIORITY = {"opus": 3, "sonnet": 2, "haiku": 1}
 
-# Pricing per million tokens (input / output) as of May 2026
+# Pricing per million tokens (input / output) as of May 2026.
+# Keys must be ordered most-specific first — matching uses substring search.
+# Opus 4.1 and deprecated Opus 4 are $15/$75; Opus 4.5+ dropped to $5/$25.
 MODEL_PRICING = {
-    "claude-opus-4": (15.00, 75.00),
-    "claude-opus-4-7": (15.00, 75.00),
+    # Opus 4.5 / 4.6 / 4.7: $5 input, $25 output
+    "claude-opus-4-7": (5.00, 25.00),
+    "claude-opus-4-6": (5.00, 25.00),
+    "claude-opus-4-5": (5.00, 25.00),
+    # Opus 4.1 and deprecated Opus 4: $15 input, $75 output
+    "claude-opus-4-1": (15.00, 75.00),
+    "claude-opus-4":   (15.00, 75.00),
+    # Sonnet 4.x: $3 input, $15 output
     "claude-sonnet-4": (3.00, 15.00),
-    "claude-sonnet-4-6": (3.00, 15.00),
-    "claude-haiku-4": (0.80, 4.00),
-    "claude-haiku-4-5": (0.80, 4.00),
+    # Haiku 4.5: $1 input, $5 output
+    "claude-haiku-4-5": (1.00, 5.00),
+    # Haiku 4.x fallback: $1 input, $5 output
+    "claude-haiku-4":   (1.00, 5.00),
+    # Haiku 3.5 (retired): $0.80 input, $4 output
+    "claude-haiku-3-5": (0.80, 4.00),
 }
 
 
@@ -129,6 +140,7 @@ def init_db(conn):
         ON turns(message_id) WHERE message_id IS NOT NULL AND message_id != ''
     """)
     conn.commit()
+    recalculate_all_costs(conn)
 
 
 def project_name_from_cwd(cwd):
@@ -146,6 +158,42 @@ def _estimate_cost(model, input_tokens, output_tokens, cache_read, cache_creatio
         (cache_read / 1_000_000) * (input_rate * 0.1) +
         (cache_creation / 1_000_000) * (input_rate * 1.25)
     )
+
+
+def recalculate_all_costs(conn):
+    """Recompute estimated_api_cost for every turn and session using current MODEL_PRICING.
+    Called automatically when the pricing version in settings doesn't match PRICING_VERSION.
+    """
+    PRICING_VERSION = "2026-05-15-v2"
+    row = conn.execute("SELECT value FROM settings WHERE key='pricing_version'").fetchone()
+    if row and row["value"] == PRICING_VERSION:
+        return
+
+    turns = conn.execute(
+        "SELECT id, model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens FROM turns"
+    ).fetchall()
+    for t in turns:
+        cost = _estimate_cost(
+            t["model"],
+            t["input_tokens"] or 0,
+            t["output_tokens"] or 0,
+            t["cache_read_tokens"] or 0,
+            t["cache_creation_tokens"] or 0,
+        )
+        conn.execute("UPDATE turns SET estimated_api_cost = ? WHERE id = ?", (cost, t["id"]))
+
+    conn.execute("UPDATE sessions SET estimated_api_cost = 0")
+    conn.execute("""
+        UPDATE sessions SET estimated_api_cost = (
+            SELECT COALESCE(SUM(t.estimated_api_cost), 0)
+            FROM turns t WHERE t.session_id = sessions.session_id
+        )
+    """)
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('pricing_version', ?)",
+        (PRICING_VERSION,)
+    )
+    conn.commit()
 
 
 def parse_jsonl_file(filepath):
