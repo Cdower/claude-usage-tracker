@@ -111,13 +111,14 @@ async function loadSummary() {
     const cmp = p.plan_comparisons?.[p.active_plan];
     if (cmp) {
       const savings = cmp.savings_30d;
-      const sign    = savings >= 0 ? '+' : '';
       const color   = savings >= 0 ? '#56cfa8' : '#e05c6b';
-      const verb    = savings >= 0 ? 'saved' : 'over budget';
+      const delta   = savings >= 0
+        ? `${fmt.usd(savings)} cheaper on ${cmp.label}`
+        : `${fmt.usd(Math.abs(savings))} cheaper on API`;
       document.getElementById('projectedSavingsSub').innerHTML =
-        `30-day API equivalent &nbsp;<span style="color:${color};font-weight:600">${sign}${fmt.usd(Math.abs(savings))} ${verb} vs ${cmp.label}</span>`;
+        `${cmp.label} (${fmt.usd(cmp.monthly_usd)}/mo) vs. API at current usage rate &nbsp;<span style="color:${color};font-weight:600">${delta}</span>`;
     } else {
-      document.getElementById('projectedSavingsSub').textContent = '30-day API equivalent at current rate';
+      document.getElementById('projectedSavingsSub').textContent = 'projected API token cost at current usage rate';
     }
 
     // Bar = projection confidence: how many of the 14-day window had active sessions
