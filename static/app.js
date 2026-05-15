@@ -107,16 +107,21 @@ async function loadSummary() {
     const proj = p.projected_30d_api_cost;
     document.getElementById('projectedCost').textContent = fmt.usd(proj);
 
-    // Pick the active plan comparison for the sub-label
+    // Pick the active plan comparison for the sub-label.
+    // savings_30d = plan_price - api_cost
+    //   negative → API costs MORE  → plan is the better deal (green)
+    //   positive → API costs LESS  → API is the better deal (amber)
     const cmp = p.plan_comparisons?.[p.active_plan];
     if (cmp) {
-      const savings = cmp.savings_30d;
-      const color   = savings >= 0 ? '#56cfa8' : '#e05c6b';
-      const delta   = savings >= 0
-        ? `${fmt.usd(savings)} cheaper on ${cmp.label}`
-        : `${fmt.usd(Math.abs(savings))} cheaper on API`;
+      const savings       = cmp.savings_30d;
+      const planIsCheaper = savings < 0;
+      const amount        = fmt.usd(Math.abs(savings));
+      const color         = planIsCheaper ? '#56cfa8' : '#e0a050';
+      const delta         = planIsCheaper
+        ? `${cmp.label} saves ${amount} vs. API tokens`
+        : `API tokens save ${amount} vs. ${cmp.label}`;
       document.getElementById('projectedSavingsSub').innerHTML =
-        `${cmp.label} (${fmt.usd(cmp.monthly_usd)}/mo) vs. API at current usage rate &nbsp;<span style="color:${color};font-weight:600">${delta}</span>`;
+        `${cmp.label} (${fmt.usd(cmp.monthly_usd)}/mo) vs. API at current usage rate — <span style="color:${color};font-weight:600">${delta}</span>`;
     } else {
       document.getElementById('projectedSavingsSub').textContent = 'projected API token cost at current usage rate';
     }
