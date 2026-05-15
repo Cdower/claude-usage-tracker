@@ -4,18 +4,22 @@ A local dashboard for tracking your Claude Code and Claude.ai usage across multi
 
 Built for individual **Pro** and **Max** plan subscribers who want visibility into what they're actually consuming and whether their subscription is paying off compared to pay-per-token API pricing.
 
-![Dashboard](docs/dashboard.png)
+> **Accuracy improves over time.** Cost and token estimates are built from your local Claude Code logs. On first run only your current session is visible; the picture fills in as you keep using Claude Code. Plan usage bars are always live from claude.ai.
 
 ---
 
 ## Features
 
-- **Real-time plan usage bars** — current session %, 7-day %, and extra usage pulled directly from claude.ai's API (no scraping, no login prompts)
+- **Real-time plan usage bars** — current session %, 7-day %, and extra usage credits pulled directly from claude.ai's internal API; no scraping, no login prompts
+- **Auto plan detection** — Pro, Max (5×), and Max (20×) are inferred from your account data; a selector is shown if detection isn't possible
 - **Local JSONL analytics** — token counts, model breakdown, project breakdown, and estimated API cost equivalent parsed from Claude Code's local logs
-- **Plan vs. API cost comparison** — see whether your $20 Pro or $100/$200 Max plan is saving you money vs. paying per token
+- **30-day rolling cost projection** — answers "at my current pace, what would I pay on the API over the next 30 days?" rather than extrapolating a partial calendar month; idle days are included so the rate is realistic
+- **Plan vs. API cost comparison** — shows projected savings (or deficit) against Pro, Max 5×, and Max 20× simultaneously
+- **Usage limits table** — all quota windows (current session, all-models 7-day, extra usage) with % used, colour-coded bars, and reset countdowns
 - **Historical charts** — 30-day daily token and cost trends, model mix over time, top projects by token spend
-- **Multi-machine sync** — a lightweight push agent (zero dependencies, stdlib only) syncs Claude Code logs from other machines to the hub
-- **No cloud account required** — runs entirely on your local network; web usage auth is borrowed from your existing Firefox session
+- **Multi-machine sync** — a lightweight push agent (zero external dependencies, stdlib only) syncs Claude Code logs from other machines to the hub
+- **Multi-browser support** — reads session cookies from Firefox, Chrome, Brave, Chromium, or Edge; no login window required
+- **Cross-platform** — macOS, Linux (including snap/Flatpak Firefox), and Windows
 
 ---
 
@@ -26,8 +30,8 @@ Built for individual **Pro** and **Max** plan subscribers who want visibility in
 | Source | What it provides | How accessed |
 |--------|-----------------|--------------|
 | `~/.claude/projects/**/*.jsonl` | Per-turn token counts, models, projects, timestamps | Read locally on each machine |
-| `claude.ai/api/organizations/{uuid}/usage` | Plan utilization % for current session, 7-day window, extra usage credits | HTTP request using Firefox session cookies |
-| Remote agents | JSONL data from other machines (laptop, etc.) | Authenticated HTTP push to the hub |
+| `claude.ai/api/organizations/{uuid}/usage` | Plan utilization % for all quota windows and extra usage credits | Authenticated HTTP using your browser's session cookies |
+| Remote agents | JSONL data from other machines (laptop, etc.) | Token-authenticated HTTP push to the hub |
 
 ### Architecture
 
@@ -41,10 +45,33 @@ Built for individual **Pro** and **Max** plan subscribers who want visibility in
 │       │                         │
 │  Scanner (local JSONL)          │      ┌──────────────────────┐
 │  Scraper (claude.ai API via     │      │  claude.ai API       │
-│           Firefox cookies)      │─────►│  /api/organizations/ │
+│           browser cookies)      │─────►│  /api/organizations/ │
 └─────────────────────────────────┘      │  {uuid}/usage        │
                                          └──────────────────────┘
 ```
+
+### Plan detection
+
+The app infers your plan from the `extra_usage.monthly_limit` field returned by the claude.ai usage API (denominated in cents):
+
+| Limit value | Dollars | Detected plan |
+|-------------|---------|--------------|
+| 2000 | $20 | Pro |
+| 10000 | $100 | Max (5×) |
+| 20000 | $200 | Max (20×) |
+
+If the value doesn't match a known plan, a selector is shown in the dashboard header. Your choice is persisted to the local database.
+
+### 30-day rolling projection
+
+Rather than extrapolating a partial calendar month (which produces misleading numbers for anyone who doesn't use Claude daily from the 1st), the projection:
+
+1. Sums API cost equivalent across the last 14 days (idle days count as $0)
+2. Divides by 14 to get a realistic average daily rate
+3. Multiplies by 30 to produce a 30-day forward estimate
+4. Compares that figure against each plan's monthly price
+
+This answers: *"At my current pace, would the API be cheaper than my subscription over the next 30 days?"*
 
 ---
 
@@ -52,7 +79,7 @@ Built for individual **Pro** and **Max** plan subscribers who want visibility in
 
 - macOS, Linux, or Windows
 - Python 3.11
-- Firefox, Chrome, Brave, or Edge with an active claude.ai session (for web usage bars)
+- Firefox, Chrome, Brave, Chromium, or Edge with an active claude.ai session (for web usage bars)
 - Claude Code installed and used at least once (for JSONL logs)
 
 ---
@@ -70,9 +97,6 @@ python3.11 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Install Firefox for Playwright (used only if you add browser-based features)
-python -m playwright install firefox
-
 # Generate a shared secret for remote agents
 python3 -c "import secrets; print('REMOTE_TOKEN=' + secrets.token_hex(32))" >> .env
 
@@ -82,7 +106,7 @@ python3 -c "import secrets; print('REMOTE_TOKEN=' + secrets.token_hex(32))" >> .
 
 Open **http://localhost:5000** in your browser.
 
-Click **Sync Now** to pull your local JSONL data and fetch live usage from claude.ai (requires Firefox with an active claude.ai session).
+Click **Sync Now** to pull your local JSONL data and fetch live usage from claude.ai. The app automatically finds your browser session — no login step required as long as you're already signed into claude.ai in any supported browser.
 
 ### Remote machine (laptop, etc.)
 
@@ -117,8 +141,9 @@ python3 ~/claude-usage-tracker/sync_agent.py
 
 ```env
 REMOTE_TOKEN=<hex secret shared with all agents>
-HOST=0.0.0.0      # bind address (default: 0.0.0.0)
+HOST=0.0.0.0      # bind address (default: 0.0.0.0 — use 127.0.0.1 for single machine)
 PORT=5000          # port (default: 5000)
+FLASK_DEBUG=0      # set to 1 during development only
 ```
 
 ### Agent `agent_config.json`
@@ -133,44 +158,63 @@ PORT=5000          # port (default: 5000)
 
 ---
 
+## Dashboard overview
+
+| Section | What it shows |
+|---------|--------------|
+| **Plan badge** (header) | Detected or selected plan; click to change |
+| **Browser status** (header) | Which browser provided the session cookie |
+| **Plan usage bars** | Live utilization % per quota window with reset countdowns |
+| **This Month** cards | Tokens used, estimated API cost, session count |
+| **Next 30 Days** card | Projected API cost at current rate vs. your plan |
+| **Usage Limits table** | All quota windows with colour-coded progress bars |
+| **Plan Comparison table** | Pro / Max 5× / Max 20× savings vs. projected 30-day API cost |
+| **Daily charts** | Token and API cost equivalent trends (last 30 days) |
+| **Model breakdown** | Donut chart of token use by model |
+| **Top projects** | Horizontal bar chart of token use by project directory |
+
+---
+
 ## API endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/` | Dashboard UI |
-| `GET` | `/api/auth/status` | Whether Firefox has a valid claude.ai session |
-| `POST` | `/api/sync` | Scan local JSONL + fetch web usage |
-| `GET` | `/api/stats/summary` | All-time and this-month token/cost totals |
-| `GET` | `/api/stats/daily` | Daily breakdown (last 30 days) |
+| `GET` | `/api/auth/status` | Auth status and which browser provided the session |
+| `POST` | `/api/sync` | Scan local JSONL + fetch live usage from claude.ai |
+| `GET` | `/api/plan` | Detected or selected plan with per-plan comparison data |
+| `POST` | `/api/plan` | Set plan manually (persisted to DB) |
+| `GET` | `/api/stats/summary` | All-time totals, this-month totals, 30-day projection |
+| `GET` | `/api/stats/daily` | Daily token + cost breakdown (last 30 days) |
 | `GET` | `/api/stats/models` | Token and cost breakdown by model |
 | `GET` | `/api/stats/projects` | Top 20 projects by token spend |
-| `GET` | `/api/web-usage/latest` | Most recent plan usage snapshot |
+| `GET` | `/api/web-usage/latest` | Most recent plan usage snapshot (bars, reset times) |
 | `GET` | `/api/web-usage/history` | Last 60 usage snapshots |
-| `GET` | `/api/plan-comparison` | Subscription vs. API cost comparison |
-| `GET` | `/api/machines` | All machines that have pushed data |
-| `POST` | `/api/remote/push` | Receive data from a remote agent (requires Bearer token) |
+| `GET` | `/api/plan-comparison` | This-month API equivalent vs. each plan |
+| `GET` | `/api/machines` | All machines that have pushed data, with last-seen time |
+| `POST` | `/api/remote/push` | Receive JSONL data from a remote agent (Bearer token required) |
 
 ---
 
 ## Plan comparison
 
-The dashboard compares your estimated API cost (computed from local token counts and published per-token pricing) against the flat subscription cost:
+Token pricing used for API cost estimates (as of May 2026):
 
-| Plan | Monthly cost |
-|------|-------------|
-| Pro | $20 |
-| Max 5× | $100 |
-| Max 20× | $200 |
+| Model | Input (per M tokens) | Output (per M tokens) |
+|-------|---------------------|----------------------|
+| Claude Opus 4.x | $15.00 | $75.00 |
+| Claude Sonnet 4.x | $3.00 | $15.00 |
+| Claude Haiku 4.x | $0.80 | $4.00 |
 
-If your estimated API-equivalent cost this month exceeds the plan price, your subscription is saving you money. If it's below, you might be better off on a pay-per-token API key.
+Cache-read tokens are priced at 10% of the input rate; cache-creation tokens at 125%.
 
-> **Note:** The API cost estimate is computed from local JSONL logs using published Anthropic pricing as of May 2026. Cache-read tokens are priced at 10% of input rate; cache-creation tokens at 125% of input rate. Actual subscription usage limits are quota-based (not token-based), so this is a directional comparison, not an exact billing figure.
+> **Important:** Subscription plans are quota-based, not token-based. The API cost estimate is a directional comparison — it tells you whether you're getting value from your subscription, not what you're being billed. Actual billing and limits are controlled by Anthropic.
 
 ---
 
 ## Multi-machine sync
 
-The hub exposes a `/api/remote/push` endpoint protected by a Bearer token. The `sync_agent.py` script on each remote machine:
+The hub exposes `/api/remote/push` protected by a Bearer token. The `sync_agent.py` on each remote machine:
 
 1. Scans `~/.claude/projects/**/*.jsonl` for new or updated files
 2. Parses sessions and turns incrementally (only new lines since last run)
@@ -179,7 +223,15 @@ The hub exposes a `/api/remote/push` endpoint protected by a Bearer token. The `
 
 If the push fails (hub unreachable), the agent does not advance its state pointer — data will be retried on the next cron run.
 
-Sessions in the database are tagged with the originating machine name, visible in the `/api/machines` endpoint.
+Sessions are tagged with the originating machine name, visible in the `/api/machines` endpoint and the dashboard's machine list.
+
+**Supported log paths by platform:**
+
+| Platform | Path |
+|----------|------|
+| macOS | `~/.claude/projects/` and Xcode assistant path |
+| Linux | `~/.claude/projects/` |
+| Windows | `%APPDATA%\Claude\projects\` |
 
 ---
 
@@ -210,16 +262,18 @@ This is a personal dashboard, not a hardened public web service. Do not expose p
 
 ```
 claude-usage-tracker/
-├── app.py              # Flask hub — API endpoints
-├── scanner.py          # JSONL log parser (incremental, deduped)
-├── scraper.py          # claude.ai usage API client (Firefox cookie auth)
-├── sync_agent.py       # Standalone push agent for remote machines
-├── requirements.txt    # Hub dependencies (Flask, curl_cffi)
-├── run.sh              # Start the hub
+├── app.py                     # Flask hub — API endpoints
+├── scanner.py                 # JSONL log parser (incremental, deduped)
+├── scraper.py                 # claude.ai usage API client (browser cookie auth)
+├── sync_agent.py              # Standalone push agent for remote machines
+├── requirements.txt           # Hub dependencies (Flask, curl_cffi, browser-cookie3)
+├── run.sh                     # Start the hub
 ├── agent_config.example.json
 ├── .env.example
+├── CHANGELOG.md
+├── CONTRIBUTORS.md
 ├── templates/
-│   └── index.html      # Dashboard HTML
+│   └── index.html             # Dashboard HTML
 └── static/
     ├── style.css
     └── app.js
@@ -246,9 +300,10 @@ An Electron/React macOS menu bar app that scrapes `claude.ai/settings/usage` for
 
 This project diverges from both by:
 - Discovering and using claude.ai's internal `/api/organizations/{uuid}/usage` JSON API instead of HTML scraping
-- Using `curl_cffi` with Firefox TLS fingerprint impersonation + direct Firefox cookie extraction to bypass Cloudflare without any login UI
+- Using `curl_cffi` with Firefox TLS fingerprint impersonation + direct browser cookie extraction to bypass Cloudflare without any login UI
+- Supporting Firefox, Chrome, Brave, Chromium, and Edge on macOS, Linux, and Windows
 - Adding multi-machine sync via a stdlib-only push agent
-- Combining both local JSONL analytics and web usage data in a single persistent dashboard
+- Combining local JSONL analytics, web usage data, plan detection, and rolling 30-day cost projection in a single persistent dashboard
 
 ---
 
