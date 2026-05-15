@@ -50,9 +50,9 @@ Built for individual **Pro** and **Max** plan subscribers who want visibility in
 
 ## Requirements
 
-- macOS (Firefox cookie reading is macOS-specific; Linux support is straightforward to add)
+- macOS, Linux, or Windows
 - Python 3.11
-- Firefox with an active claude.ai session (for web usage bars)
+- Firefox, Chrome, Brave, or Edge with an active claude.ai session (for web usage bars)
 - Claude Code installed and used at least once (for JSONL logs)
 
 ---
@@ -185,9 +185,24 @@ Sessions in the database are tagged with the originating machine name, visible i
 
 ## Security
 
-- The push endpoint requires a `Bearer` token set via `REMOTE_TOKEN` in the hub's `.env`
-- Web usage auth uses read-only access to Firefox's local cookie database — no credentials are stored or transmitted by this app
-- The hub binds to `0.0.0.0` by default so remote agents can reach it on the local network; set `HOST=127.0.0.1` in `.env` to restrict to localhost if you only use it locally
+This project is designed for personal, local-network use. The following hardening measures are in place:
+
+**Authentication & transport**
+- The remote push endpoint requires a cryptographically random Bearer token (`REMOTE_TOKEN`). Generate one with `python3 -c "import secrets; print(secrets.token_hex(32))"` and keep it out of version control.
+- Token verification uses a constant-time comparison to resist timing-based inference.
+- The hub binds to `0.0.0.0` by default so remote agents can reach it on the local network. Set `HOST=127.0.0.1` in `.env` if you only run one machine.
+
+**Browser cookie access**
+- Cookie reading is read-only and entirely local — no credentials are stored by this app or transmitted anywhere beyond claude.ai itself.
+- Temporary copies of the browser cookie database are created securely and deleted immediately after reading.
+
+**Input handling**
+- Incoming push payloads are bounded by size and record count to prevent resource exhaustion.
+- The debug server is off by default; set `FLASK_DEBUG=1` to enable it during development only.
+- API responses are restricted to same-origin requests.
+
+**What this tool is not**
+This is a personal dashboard, not a hardened public web service. Do not expose port 5000 to the internet. If you need remote access from outside your local network, put it behind a reverse proxy with TLS and authentication (e.g. nginx + Let's Encrypt + HTTP basic auth).
 
 ---
 
