@@ -101,29 +101,33 @@ async function loadSummary() {
   document.getElementById('monthCost').textContent = fmt.usd(m.api_cost);
   document.getElementById('monthSessions').textContent = m.sessions ?? '—';
 
-  // Projected month-end card
+  // Rolling 30-day projection card
   const p = data.projected || {};
-  if (p.projected_api_cost != null) {
-    const proj = p.projected_api_cost;
-    const plan = p.plan_monthly_usd || 0;
-    const savings = p.projected_savings;
-
+  if (p.projected_30d_api_cost != null) {
+    const proj = p.projected_30d_api_cost;
     document.getElementById('projectedCost').textContent = fmt.usd(proj);
 
-    if (plan > 0) {
-      const sign = savings >= 0 ? '+' : '';
-      const color = savings >= 0 ? '#56cfa8' : '#e05c6b';
+    // Pick the active plan comparison for the sub-label
+    const cmp = p.plan_comparisons?.[p.active_plan];
+    if (cmp) {
+      const savings = cmp.savings_30d;
+      const sign    = savings >= 0 ? '+' : '';
+      const color   = savings >= 0 ? '#56cfa8' : '#e05c6b';
+      const verb    = savings >= 0 ? 'saved' : 'over budget';
       document.getElementById('projectedSavingsSub').innerHTML =
-        `projected API cost &nbsp;<span style="color:${color};font-weight:600">${sign}${fmt.usd(Math.abs(savings))} ${savings >= 0 ? 'saved' : 'over'} vs ${p.plan}</span>`;
+        `30-day API equivalent &nbsp;<span style="color:${color};font-weight:600">${sign}${fmt.usd(Math.abs(savings))} ${verb} vs ${cmp.label}</span>`;
     } else {
-      document.getElementById('projectedSavingsSub').textContent = 'estimated API cost';
+      document.getElementById('projectedSavingsSub').textContent = '30-day API equivalent at current rate';
     }
 
-    // Month progress bar
-    const pct = Math.min((p.fraction_elapsed || 0) * 100, 100);
-    document.getElementById('projectedBar').style.width = pct + '%';
+    // Bar = daily rate expressed as % of the cheapest plan's daily budget
+    const cheapestDaily = 20 / 30;  // Pro daily budget
+    const ratePct = Math.min((p.daily_rate / cheapestDaily) * 100, 100);
+    document.getElementById('projectedBar').style.width = ratePct + '%';
     document.getElementById('projectedDays').textContent =
-      `day ${Math.floor(p.days_elapsed)} of ${p.days_in_month}`;
+      p.days_with_data
+        ? `avg over ${p.window_days}-day window (${p.days_with_data} active days)`
+        : 'no data yet';
   }
 }
 

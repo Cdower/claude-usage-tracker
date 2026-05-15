@@ -156,13 +156,27 @@ def stats_summary():
         FROM sessions WHERE first_timestamp >= ?
     """, (month_start,)).fetchone()
 
-    # Projected full-month cost based on days elapsed
-    now = datetime.now()
-    days_in_month = calendar.monthrange(now.year, now.month)[1]
-    days_elapsed = now.day + (now.hour / 24)
-    fraction = days_elapsed / days_in_month
-    monthly_cost = (monthly["api_cost"] or 0) if monthly else 0
-    projected_cost = (monthly_cost / fraction) if fraction > 0 else 0
+    # Rolling 30-day projection based on recent daily usage rate.
+    # Use the last 14 days (or however many have data) to compute average
+    # daily API cost, then project forward 30 days. This is subscription-
+    # cycle-agnostic and reflects the user's actual current pace.
+    recent = conn.execute("""
+        SELECT
+            SUM(estimated_api_cost) AS cost,
+            COUNT(DISTINCT substr(first_timestamp, 1, 10)) AS days_with_data,
+            MIN(substr(first_timestamp, 1, 10)) AS earliest_day
+        FROM sessions
+        WHERE first_timestamp >= date('now', '-14 days')
+    """).fetchone()
+
+    recent_cost = (recent["cost"] or 0) if recent else 0
+    days_with_data = (recent["days_with_data"] or 0) if recent else 0
+
+    # Use actual days in the window, not just days with sessions, so idle days
+    # correctly pull the average down.
+    window_days = 14
+    daily_rate = recent_cost / window_days if window_days > 0 else 0
+    projected_30d = daily_rate * 30
 
     # Use last saved web-usage snapshot for plan — avoids a live HTTP call per page load
     plan_data = _get_setting("selected_plan")
@@ -171,21 +185,29 @@ def stats_summary():
     ).fetchone()
     detected_plan = snap["plan"] if snap else None
     active_plan = detected_plan or plan_data
-    plan_monthly = PLAN_DETAILS.get(active_plan, {}).get("monthly_usd", 0)
-    projected_savings = plan_monthly - projected_cost
+
+    # Savings vs each plan over 30 days
+    plan_comparisons = {
+        name: {
+            "monthly_usd": p["monthly_usd"],
+            "label": p["label"],
+            "savings_30d": round(p["monthly_usd"] - projected_30d, 2),
+            "api_is_cheaper": projected_30d < p["monthly_usd"],
+        }
+        for name, p in PLAN_DETAILS.items()
+    }
 
     conn.close()
     return jsonify({
         "allTime": dict(totals) if totals else {},
         "thisMonth": dict(monthly) if monthly else {},
         "projected": {
-            "days_elapsed": round(days_elapsed, 1),
-            "days_in_month": days_in_month,
-            "fraction_elapsed": round(fraction, 3),
-            "projected_api_cost": round(projected_cost, 2),
-            "plan_monthly_usd": plan_monthly,
-            "projected_savings": round(projected_savings, 2),
-            "plan": active_plan,
+            "daily_rate": round(daily_rate, 4),
+            "projected_30d_api_cost": round(projected_30d, 2),
+            "window_days": window_days,
+            "days_with_data": days_with_data,
+            "active_plan": active_plan,
+            "plan_comparisons": plan_comparisons,
         },
     })
 
