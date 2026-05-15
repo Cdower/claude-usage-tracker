@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Usage Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="header-left">
+      <h1>Claude Usage Tracker</h1>
+      <span id="planBadge" class="badge"></span>
+    </div>
+    <div class="header-right">
+      <span id="authStatus" class="auth-status"></span>
+      <button id="syncBtn" class="btn btn-primary">Sync Now</button>
+    </div>
+  </header>
+
+  <!-- Web Usage Bars (scraped from claude.ai) -->
+  <section id="webUsageSection" style="display:none">
+    <h2>Plan Usage <span class="section-note">from claude.ai</span></h2>
+    <div id="usageBars" class="usage-bars"></div>
+    <p id="resetDate" class="reset-date"></p>
+  </section>
+
+  <!-- Summary Cards -->
+  <section>
+    <h2>This Month <span class="section-note">from local logs</span></h2>
+    <div class="cards">
+      <div class="card">
+        <div class="card-label">Tokens Used</div>
+        <div class="card-value" id="monthTokens">—</div>
+        <div class="card-sub">input + output + cache</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Est. API Cost</div>
+        <div class="card-value" id="monthCost">—</div>
+        <div class="card-sub">if billed at API rates</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Sessions</div>
+        <div class="card-value" id="monthSessions">—</div>
+        <div class="card-sub">Claude Code sessions</div>
+      </div>
+      <div class="card highlight" id="savingsCard">
+        <div class="card-label">Plan Savings</div>
+        <div class="card-value" id="planSavings">—</div>
+        <div class="card-sub" id="planSavingsSub">vs. API pricing</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Plan Comparison Table -->
+  <section>
+    <h2>Plan Comparison</h2>
+    <table class="plan-table">
+      <thead>
+        <tr>
+          <th>Plan</th>
+          <th>Monthly Cost</th>
+          <th>Your API Equivalent</th>
+          <th>Verdict</th>
+        </tr>
+      </thead>
+      <tbody id="planTableBody"></tbody>
+    </table>
+  </section>
+
+  <!-- Charts -->
+  <section class="charts">
+    <div class="chart-box">
+      <h2>Daily Token Usage</h2>
+      <canvas id="dailyTokenChart"></canvas>
+    </div>
+    <div class="chart-box">
+      <h2>Daily API Cost Equivalent</h2>
+      <canvas id="dailyCostChart"></canvas>
+    </div>
+    <div class="chart-box">
+      <h2>Usage by Model</h2>
+      <canvas id="modelChart"></canvas>
+    </div>
+    <div class="chart-box">
+      <h2>Top Projects</h2>
+      <canvas id="projectChart"></canvas>
+    </div>
+  </section>
+
+  <footer>
+    <span id="lastSync">Never synced</span>
+    <span>· Local logs auto-scan on sync · Web usage requires login</span>
+  </footer>
+
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>
