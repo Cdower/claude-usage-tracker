@@ -171,6 +171,35 @@
     </div>
   </section>
 
+  <!-- Methodology -->
+  <section class="methodology-section">
+    <h2>Methodology &amp; Sources</h2>
+    <div class="methodology-body">
+      <p><strong>Token cost estimates</strong> are calculated from Claude Code's local JSONL session logs using
+      published <a href="https://platform.claude.com/docs/en/about-claude/pricing" target="_blank" rel="noopener">Anthropic API pricing</a>.
+      Each turn's input, output, cache-write, and cache-read token counts are multiplied by the per-model rates:
+      cache reads at <strong>0.1×</strong> the input rate, cache writes at <strong>1.25×</strong>.</p>
+
+      <p><strong>About that large token count.</strong> Claude Code uses prompt caching aggressively — on every turn,
+      the full conversation context is re-read from cache. A single long session can accumulate hundreds of millions
+      of cache-read tokens. These are real (cheap) API charges and are included in the token count, but the cost
+      estimate applies the correct 10% rate so the dollar figure is not similarly inflated.</p>
+
+      <p><strong>Plan vs. API comparison caveat.</strong> The "Est. API Cost" answers: <em>what would this exact usage
+      have cost at pay-per-token rates?</em> Two important limits to that comparison:</p>
+      <ol>
+        <li>Subscription plans are quota-based, not token-based. Anthropic controls actual limits and billing.
+        Usage limits for Claude Code subscribers were doubled on May 6, 2026 —
+        see <a href="https://www.anthropic.com/news/higher-limits-spacex" target="_blank" rel="noopener">this announcement</a>.</li>
+        <li>Caching behavior on a subscription plan may differ from direct API use. The estimate assumes you would
+        replicate the identical usage pattern on the API, which may overstate what you'd actually pay.</li>
+      </ol>
+
+      <p><strong>This tool is not affiliated with Anthropic.</strong> Figures are estimates only and do not
+      constitute official billing information.</p>
+    </div>
+  </section>
+
   <!-- Author contact -->
   <div class="author-card">
     <p>Hope you find this tool useful.</p>

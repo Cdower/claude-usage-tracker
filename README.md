@@ -196,19 +196,28 @@ FLASK_DEBUG=0      # set to 1 during development only
 
 ---
 
-## Plan comparison
+## Plan comparison and cost methodology
 
-Token pricing used for API cost estimates (as of May 2026):
+Token pricing used for API cost estimates (as of May 2026, source: [Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing)):
 
-| Model | Input (per M tokens) | Output (per M tokens) |
-|-------|---------------------|----------------------|
-| Claude Opus 4.x | $15.00 | $75.00 |
-| Claude Sonnet 4.x | $3.00 | $15.00 |
-| Claude Haiku 4.x | $0.80 | $4.00 |
+| Model | Input (per M tokens) | Cache write (per M tokens) | Cache read (per M tokens) | Output (per M tokens) |
+|-------|---------------------|---------------------------|--------------------------|----------------------|
+| Claude Opus 4.5 / 4.6 / 4.7 | $5.00 | $6.25 | $0.50 | $25.00 |
+| Claude Opus 4.1 / 4 (deprecated) | $15.00 | $18.75 | $1.50 | $75.00 |
+| Claude Sonnet 4.x | $3.00 | $3.75 | $0.30 | $15.00 |
+| Claude Haiku 4.5 | $1.00 | $1.25 | $0.10 | $5.00 |
+| Claude Haiku 3.5 (retired) | $0.80 | $1.00 | $0.08 | $4.00 |
 
-Cache-read tokens are priced at 10% of the input rate; cache-creation tokens at 125%.
+### About cache tokens
 
-> **Important:** Subscription plans are quota-based, not token-based. The API cost estimate is a directional comparison — it tells you whether you're getting value from your subscription, not what you're being billed. Actual billing and limits are controlled by Anthropic.
+Heavy Claude Code usage produces very large raw token counts because **prompt caching re-reads the entire conversation context on every turn**. A session with a 200K-token context and 500 turns accumulates 100M cache-read tokens — these are real API charges, but at 10% of the standard input rate. The dashboard's cost estimate correctly applies the 10% multiplier; the raw token count is accurate but can look alarming without context.
+
+### Caveat: plan vs. API comparison
+
+The "Est. API Cost" figure answers the hypothetical: *"What would this usage have cost at pay-per-token API rates?"* It is a directional comparison, not a billing statement. Two important caveats:
+
+1. **Subscription plans are quota-based, not token-based.** Anthropic controls your actual limits and billing. Usage limits for Claude Code subscribers were doubled on May 6, 2026 — see [this announcement](https://www.anthropic.com/news/higher-limits-spacex).
+2. **Caching behavior may differ between plan and API use.** Claude Code on a subscription plan may cache more aggressively than direct API calls would. The API cost estimate assumes you'd replicate the exact same usage pattern on the API, which may not reflect what you'd actually do or pay.
 
 ---
 
