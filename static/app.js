@@ -390,19 +390,26 @@ function renderBillingPeriods(periods) {
 
 async function loadBillingPeriods() {
   const settingRes = await fetch('/api/settings/billing-start-date').then(r => r.json());
-  const setup = document.getElementById('billingSetup');
-  const table = document.getElementById('billingTable');
+  const bannerSetup = document.getElementById('billingBannerSetup');
+  const bannerSet   = document.getElementById('billingBannerSet');
+  const table       = document.getElementById('billingTable');
+  const noDate      = document.getElementById('billingNoDate');
 
   if (!settingRes.billing_start_date) {
-    setup.style.display = '';
-    table.style.display = 'none';
+    bannerSetup.style.display = '';
+    bannerSet.style.display   = 'none';
+    table.style.display       = 'none';
+    noDate.style.display      = '';
     return;
   }
 
-  setup.style.display = 'none';
-  table.style.display = '';
+  bannerSetup.style.display = 'none';
+  bannerSet.style.display   = '';
+  table.style.display       = '';
+  noDate.style.display      = 'none';
 
   document.getElementById('billingStartInput').value = settingRes.billing_start_date;
+  document.getElementById('billingBannerDate').textContent = fmtBillingDate(settingRes.billing_start_date);
 
   const periods = await fetch('/api/stats/billing-periods').then(r => r.json());
   renderBillingPeriods(periods);
@@ -420,10 +427,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (res.ok) loadBillingPeriods();
   });
 
-  document.getElementById('billingEditLink').addEventListener('click', e => {
+  document.getElementById('billingBannerEdit').addEventListener('click', e => {
     e.preventDefault();
-    document.getElementById('billingSetup').style.display = '';
-    document.getElementById('billingTable').style.display = 'none';
+    document.getElementById('billingBannerSetup').style.display = '';
+    document.getElementById('billingBannerSet').style.display   = 'none';
   });
 });
 

@@ -352,6 +352,64 @@ footer {
   h1 { font-size: 1.2rem; }
 }
 
+/* Billing start date banner */
+.billing-banner {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.billing-banner-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.billing-banner-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.billing-banner-input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 15px;
+  padding: 8px 12px;
+}
+.billing-banner-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+.billing-banner-set {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-color: var(--border);
+  padding: 10px 16px;
+}
+.billing-banner-set-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+.billing-banner-set-label strong {
+  color: var(--text);
+}
+.billing-banner-edit-link {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.billing-banner-edit-link:hover { text-decoration: underline; }
+.billing-no-date {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 12px 0;
+}
+
 /* Billing History */
 .billing-setup {
   display: flex;
