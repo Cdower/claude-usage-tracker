@@ -1,7 +1,7 @@
 """
-Fetches claude.ai usage data via its internal API, using cookies from the
-user's real Firefox profile. No login window, no headless browser — just
-authenticated HTTP calls with Firefox TLS fingerprinting via curl_cffi.
+Fetches claude.ai usage data via its internal API, using cookies borrowed
+from the user's local browser. Supports Firefox, Chrome, Brave, and Edge
+on macOS, Linux, and Windows. No login window, no headless browser.
 """
 
 import json
@@ -18,29 +18,29 @@ from curl_cffi import requests as cffi_requests
 DB_PATH = Path(__file__).parent / "usage.db"
 SESSION_COOKIE_NAMES = {"sessionKey", "sessionKeyLC", "__Secure-next-auth.session-token"}
 
+# Browsers tried via browser-cookie3, in priority order.
+# Firefox is handled separately (direct SQLite read — no extra deps needed).
+CHROMIUM_BROWSERS = ["chrome", "brave", "chromium", "edge"]
+
+
+# ── Firefox (direct SQLite read) ──────────────────────────────────────────────
 
 def _firefox_profiles_dirs():
-    """Return candidate Firefox profile directories for the current OS."""
     if sys.platform == "darwin":
         return [Path.home() / "Library" / "Application Support" / "Firefox" / "Profiles"]
     if sys.platform == "win32":
         appdata = os.environ.get("APPDATA", "")
         return [Path(appdata) / "Mozilla" / "Firefox" / "Profiles"] if appdata else []
-    # Linux and other POSIX
     return [
         Path.home() / ".mozilla" / "firefox",
-        Path.home() / "snap" / "firefox" / "common" / ".mozilla" / "firefox",  # Ubuntu snap
-        Path("/var/lib/flatpak/app/org.mozilla.firefox")  # Flatpak (less common)
+        Path.home() / "snap" / "firefox" / "common" / ".mozilla" / "firefox",
+        Path.home() / ".var" / "app" / "org.mozilla.firefox" / ".mozilla" / "firefox",
     ]
 
 
 def _find_firefox_cookie_db():
-    """Return the Firefox profile cookies.sqlite with claude.ai session cookies."""
-    candidates = _firefox_profiles_dirs()
-    if not any(d.exists() for d in candidates):
-        return None
     best, best_hits = None, 0
-    for profiles_dir in candidates:
+    for profiles_dir in _firefox_profiles_dirs():
         if not profiles_dir.exists():
             continue
         try:
@@ -68,8 +68,7 @@ def _find_firefox_cookie_db():
     return best
 
 
-def _load_cookies():
-    """Return {name: value} dict of all claude.ai cookies from Firefox."""
+def _load_firefox_cookies():
     db = _find_firefox_cookie_db()
     if not db:
         return {}
@@ -86,15 +85,63 @@ def _load_cookies():
     return {name: value for name, value in rows}
 
 
-def _session():
-    s = cffi_requests.Session(impersonate="firefox133")
-    s.cookies.update(_load_cookies())
-    return s
+# ── Chromium-family (Chrome, Brave, Edge) via browser-cookie3 ─────────────────
+
+def _load_chromium_cookies(browser_name):
+    """Return {name: value} for claude.ai cookies from a Chromium-based browser."""
+    try:
+        import browser_cookie3
+        fn = getattr(browser_cookie3, browser_name, None)
+        if fn is None:
+            return {}
+        jar = fn(domain_name="claude.ai")
+        return {c.name: c.value for c in jar}
+    except Exception:
+        return {}
+
+
+# ── Unified cookie loader ─────────────────────────────────────────────────────
+
+def _best_cookies():
+    """
+    Try each supported browser in order and return (cookies_dict, browser_name)
+    for the first one that has a live claude.ai session.
+
+    Order: Firefox → Chrome → Brave → Chromium → Edge
+    """
+    # Firefox first — direct SQLite, no decryption needed
+    ff = _load_firefox_cookies()
+    if set(ff) & SESSION_COOKIE_NAMES:
+        return ff, "firefox"
+
+    # Chromium-family browsers via browser-cookie3
+    for browser in CHROMIUM_BROWSERS:
+        cookies = _load_chromium_cookies(browser)
+        if set(cookies) & SESSION_COOKIE_NAMES:
+            return cookies, browser
+
+    return {}, None
 
 
 def is_authenticated():
-    cookies = _load_cookies()
-    return bool(set(cookies) & SESSION_COOKIE_NAMES)
+    _, browser = _best_cookies()
+    return browser is not None
+
+
+def auth_browser():
+    """Return the name of the browser providing the session, or None."""
+    _, browser = _best_cookies()
+    return browser
+
+
+def _session():
+    cookies, browser = _best_cookies()
+    # Impersonate Firefox for TLS fingerprinting regardless of source browser —
+    # curl_cffi doesn't have a Chrome profile that passes Cloudflare, and
+    # Firefox impersonation works fine for all cookie sources.
+    s = cffi_requests.Session(impersonate="firefox133")
+    s.cookies.update(cookies)
+    return s
 
 
 def _get_org_uuid(session):

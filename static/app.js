@@ -32,10 +32,11 @@ async function checkAuth() {
   const res = await fetch('/api/auth/status').then(r => r.json());
   const el = document.getElementById('authStatus');
   if (res.authenticated) {
-    el.textContent = '● Firefox session active';
+    const name = res.browser ? res.browser.charAt(0).toUpperCase() + res.browser.slice(1) : 'Browser';
+    el.textContent = `● ${name} session active`;
     el.style.color = '#56cfa8';
   } else {
-    el.textContent = '● Log into claude.ai in Firefox to enable web sync';
+    el.textContent = '● Log into claude.ai in Firefox or Chrome to enable web sync';
     el.style.color = '#e0a050';
   }
 }

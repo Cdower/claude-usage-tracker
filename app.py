@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 
 from scanner import scan, get_db, init_db, DB_PATH
-from scraper import is_authenticated, collect, fetch_usage
+from scraper import is_authenticated, auth_browser, collect, fetch_usage
 
 app = Flask(__name__)
 CORS(app)
@@ -55,7 +55,8 @@ def require_token(f):
 
 @app.get("/api/auth/status")
 def auth_status():
-    return jsonify({"authenticated": is_authenticated()})
+    browser = auth_browser()
+    return jsonify({"authenticated": browser is not None, "browser": browser})
 
 
 
