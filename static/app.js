@@ -120,14 +120,17 @@ async function loadSummary() {
       document.getElementById('projectedSavingsSub').textContent = '30-day API equivalent at current rate';
     }
 
-    // Bar = daily rate expressed as % of the cheapest plan's daily budget
-    const cheapestDaily = 20 / 30;  // Pro daily budget
-    const ratePct = Math.min((p.daily_rate / cheapestDaily) * 100, 100);
-    document.getElementById('projectedBar').style.width = ratePct + '%';
+    // Bar = projection confidence: how many of the 14-day window had active sessions
+    const confidence = Math.min(((p.days_with_data || 0) / (p.window_days || 14)) * 100, 100);
+    const bar = document.getElementById('projectedBar');
+    bar.style.width = confidence + '%';
+    bar.style.background = confidence >= 50 ? 'var(--accent2)' : '#e0a050';
+
+    const dayLabel = p.days_with_data === 1 ? 'day' : 'days';
     document.getElementById('projectedDays').textContent =
       p.days_with_data
-        ? `avg over ${p.window_days}-day window (${p.days_with_data} active days)`
-        : 'no data yet';
+        ? `projection confidence: ${p.days_with_data} active ${dayLabel} of last ${p.window_days}`
+        : 'no data yet — sync to begin tracking';
   }
 }
 
