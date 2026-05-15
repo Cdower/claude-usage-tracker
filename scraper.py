@@ -154,13 +154,40 @@ def _get_org_uuid(session):
     return orgs[0]["uuid"]
 
 
+def detect_plan(usage_data):
+    """
+    Infer Pro / Max5 / Max20 from the usage API response.
+
+    The extra_usage.monthly_limit field is denominated in cents:
+      2000  cents = $20  → Pro
+      10000 cents = $100 → Max5
+      20000 cents = $200 → Max20
+
+    Both Pro and Max plans may have extra_usage enabled, so we cannot use
+    its presence alone — we must check the monthly_limit value.
+
+    Returns "Pro", "Max5", "Max20", or None if the value is unrecognised.
+    """
+    extra = usage_data.get("extra_usage")
+    if not extra:
+        return None
+    limit = extra.get("monthly_limit") or 0
+    if limit <= 2000:       # $20 → Pro
+        return "Pro"
+    if limit <= 10000:      # $100 → Max5
+        return "Max5"
+    if limit <= 20000:      # $200 → Max20
+        return "Max20"
+    return None             # Unknown — fall back to user selection
+
+
 def fetch_usage():
     """
     Returns dict with utilization percentages and reset times from claude.ai API.
-    Keys: five_hour, seven_day, seven_day_opus, seven_day_sonnet, extra_usage, ...
+    Includes 'detected_plan' key with the inferred plan name.
     """
     if not is_authenticated():
-        return {"authenticated": False, "error": "Not logged into claude.ai in Firefox"}
+        return {"authenticated": False, "error": "Not logged into claude.ai in browser"}
 
     try:
         session = _session()
@@ -171,7 +198,12 @@ def fetch_usage():
         )
         r.raise_for_status()
         data = r.json()
-        return {"authenticated": True, "org_uuid": org_uuid, **data}
+        return {
+            "authenticated": True,
+            "org_uuid": org_uuid,
+            "detected_plan": detect_plan(data),
+            **data,
+        }
     except Exception as e:
         return {"authenticated": False, "error": str(e)}
 

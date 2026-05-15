@@ -200,12 +200,64 @@ async function loadProjectChart() {
   });
 }
 
+// ── Plan badge + selector ─────────────────────────────────────────────────────
+
+const PLAN_LABELS = { Pro: 'Pro Plan', Max5: 'Max Plan (5×)', Max20: 'Max Plan (20×)' };
+
+async function loadPlan() {
+  const data = await fetch('/api/plan').then(r => r.json());
+  const badge = document.getElementById('planBadge');
+
+  if (data.plan) {
+    badge.textContent = PLAN_LABELS[data.plan] || data.plan;
+    // Dim badge if user-selected rather than API-detected (less confident)
+    badge.style.opacity = data.detected ? '1' : '0.75';
+    badge.title = data.detected
+      ? `Auto-detected from claude.ai API. Click to override.`
+      : `Manually set. Click to change.`;
+  } else {
+    badge.textContent = 'Select Plan';
+    badge.style.opacity = '1';
+    showPlanModal();
+  }
+  return data;
+}
+
+function showPlanModal() {
+  document.getElementById('planModal').style.display = 'flex';
+}
+
+function hidePlanModal() {
+  document.getElementById('planModal').style.display = 'none';
+}
+
+document.getElementById('planBadge').addEventListener('click', showPlanModal);
+
+document.getElementById('planModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('planModal')) hidePlanModal();
+});
+
+document.querySelectorAll('.plan-option').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const plan = btn.dataset.plan;
+    await fetch('/api/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan }),
+    });
+    hidePlanModal();
+    loadPlan();
+    loadPlanComparison();
+  });
+});
+
 // ── Boot ─────────────────────────────────────────────────────────────────────
 
 async function loadAll() {
   await Promise.all([
     loadWebUsage(),
     loadSummary(),
+    loadPlan(),
     loadPlanComparison(),
     loadDailyCharts(),
     loadModelChart(),

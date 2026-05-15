@@ -16,12 +16,6 @@ CORS(app)
 
 REMOTE_TOKEN = os.environ.get("REMOTE_TOKEN", "")
 
-# Subscription plan pricing
-PLANS = {
-    "Pro": {"monthly_usd": 20},
-    "Max5": {"monthly_usd": 100},
-    "Max20": {"monthly_usd": 200},
-}
 
 
 def _db():
@@ -30,11 +24,75 @@ def _db():
     return conn
 
 
+def _ensure_settings_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
+    conn.commit()
+
+
 @app.before_request
 def ensure_db():
     conn = get_db()
     init_db(conn)
+    _ensure_settings_table(conn)
     conn.close()
+
+
+def _get_setting(key, default=None):
+    conn = _db()
+    _ensure_settings_table(conn)
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    conn.close()
+    return row["value"] if row else default
+
+
+def _set_setting(key, value):
+    conn = _db()
+    _ensure_settings_table(conn)
+    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
+    conn.commit()
+    conn.close()
+
+
+# ── Plan ─────────────────────────────────────────────────────────────────────
+
+PLAN_DETAILS = {
+    "Pro":   {"monthly_usd": 20,  "label": "Pro"},
+    "Max5":  {"monthly_usd": 100, "label": "Max (5×)"},
+    "Max20": {"monthly_usd": 200, "label": "Max (20×)"},
+}
+
+
+@app.get("/api/plan")
+def get_plan():
+    """Return the current plan: API-detected if available, else user-selected."""
+    usage = fetch_usage() if is_authenticated() else {}
+    detected = usage.get("detected_plan")      # from API
+    selected  = _get_setting("selected_plan")  # user override
+
+    plan = detected or selected
+    return jsonify({
+        "plan":     plan,
+        "detected": detected,
+        "selected": selected,
+        "details":  PLAN_DETAILS.get(plan),
+        "options":  PLAN_DETAILS,
+    })
+
+
+@app.post("/api/plan")
+def set_plan():
+    """User explicitly sets their plan (used when auto-detection is unavailable)."""
+    body = request.get_json(force=True)
+    plan = body.get("plan")
+    if plan not in PLAN_DETAILS:
+        return jsonify({"error": f"Unknown plan '{plan}'. Choose from: {list(PLAN_DETAILS)}"}), 400
+    _set_setting("selected_plan", plan)
+    return jsonify({"plan": plan, "details": PLAN_DETAILS[plan]})
 
 
 # ── Auth helpers ─────────────────────────────────────────────────────────────
@@ -214,10 +272,11 @@ def plan_comparison():
         "plans": {
             name: {
                 "monthly_usd": plan["monthly_usd"],
+                "label": plan["label"],
                 "savings_vs_api": round(api_cost - plan["monthly_usd"], 2),
                 "api_is_cheaper": api_cost < plan["monthly_usd"],
             }
-            for name, plan in PLANS.items()
+            for name, plan in PLAN_DETAILS.items()
         }
     })
 

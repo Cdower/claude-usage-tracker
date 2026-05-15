@@ -13,7 +13,7 @@
   <header>
     <div class="header-left">
       <h1>Claude Usage Tracker</h1>
-      <span id="planBadge" class="badge"></span>
+      <span id="planBadge" class="badge" style="cursor:pointer" title="Click to change plan">—</span>
     </div>
     <div class="header-right">
       <span id="authStatus" class="auth-status"></span>
@@ -91,9 +91,46 @@
     </div>
   </section>
 
+  <!-- Plan selector modal -->
+  <div id="planModal" class="modal" style="display:none">
+    <div class="modal-box">
+      <h3>Select your Claude plan</h3>
+      <p>We couldn't detect your plan automatically. Select the one you're subscribed to:</p>
+      <div class="plan-options">
+        <button class="plan-option" data-plan="Pro">
+          <strong>Pro</strong><span>$20 / month</span>
+        </button>
+        <button class="plan-option" data-plan="Max5">
+          <strong>Max (5×)</strong><span>$100 / month</span>
+        </button>
+        <button class="plan-option" data-plan="Max20">
+          <strong>Max (20×)</strong><span>$200 / month</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <footer>
-    <span id="lastSync">Never synced</span>
-    <span>· Local logs auto-scan on sync · Web usage requires login</span>
+    <div class="footer-main">
+      <span id="lastSync">Never synced</span>
+      <span>· Local logs auto-scan on sync · Web usage requires a browser session on claude.ai</span>
+    </div>
+    <div class="footer-credits">
+      <p>
+        Built on ideas and code from
+        <a href="https://github.com/phuryn/claude-usage" target="_blank" rel="noopener">phuryn/claude-usage</a>
+        and
+        <a href="https://github.com/IgniteStudiosLtd/claude-usage-tool" target="_blank" rel="noopener">IgniteStudiosLtd/claude-usage-tool</a>.
+        Released under the <a href="https://github.com/jimdawdy-hub/claude-usage-tracker/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>.
+      </p>
+      <p class="footer-legal">
+        <strong>Disclaimer:</strong> This tool reads locally stored browser cookies and Claude Code log files
+        on your own machine to estimate token usage and costs. It is not affiliated with or endorsed by
+        Anthropic. Usage figures are estimates only and do not constitute official billing information.
+        Token pricing is based on publicly listed Anthropic API rates and may not reflect your actual charges.
+        Use at your own risk. No data is transmitted to any third party.
+      </p>
+    </div>
   </footer>
 
 </div>
