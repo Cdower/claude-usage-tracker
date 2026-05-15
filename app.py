@@ -350,6 +350,135 @@ def plan_comparison():
     })
 
 
+# ── Billing periods ───────────────────────────────────────────────────────────
+
+def _add_months(d, n):
+    """Return date d advanced by n calendar months, clamping to last day of month."""
+    month = d.month - 1 + n
+    year  = d.year + month // 12
+    month = month % 12 + 1
+    day   = min(d.day, calendar.monthrange(year, month)[1])
+    return d.replace(year=year, month=month, day=day)
+
+
+@app.get("/api/stats/billing-periods")
+def billing_periods():
+    raw = _get_setting("billing_start_date")
+    if not raw:
+        return jsonify([])
+
+    try:
+        start = datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        return jsonify([])
+
+    today = datetime.now().date()
+    conn  = _db()
+
+    snap = conn.execute(
+        "SELECT plan FROM web_usage_snapshots ORDER BY timestamp DESC LIMIT 1"
+    ).fetchone()
+    selected = _get_setting("selected_plan")
+    active_plan = (snap["plan"] if snap else None) or selected
+    plan_cost = PLAN_DETAILS.get(active_plan, {}).get("monthly_usd")
+
+    def query_period(date_from, date_to):
+        if date_from is None and date_to is None:
+            row = conn.execute("""
+                SELECT SUM(total_input_tokens + total_output_tokens +
+                           total_cache_read + total_cache_creation) AS tokens,
+                       SUM(estimated_api_cost) AS api_cost,
+                       COUNT(*) AS sessions
+                FROM sessions
+            """).fetchone()
+        elif date_from is None:
+            row = conn.execute("""
+                SELECT SUM(total_input_tokens + total_output_tokens +
+                           total_cache_read + total_cache_creation) AS tokens,
+                       SUM(estimated_api_cost) AS api_cost,
+                       COUNT(*) AS sessions
+                FROM sessions WHERE first_timestamp < ?
+            """, (date_to.isoformat(),)).fetchone()
+        elif date_to is None:
+            row = conn.execute("""
+                SELECT SUM(total_input_tokens + total_output_tokens +
+                           total_cache_read + total_cache_creation) AS tokens,
+                       SUM(estimated_api_cost) AS api_cost,
+                       COUNT(*) AS sessions
+                FROM sessions WHERE first_timestamp >= ?
+            """, (date_from.isoformat(),)).fetchone()
+        else:
+            row = conn.execute("""
+                SELECT SUM(total_input_tokens + total_output_tokens +
+                           total_cache_read + total_cache_creation) AS tokens,
+                       SUM(estimated_api_cost) AS api_cost,
+                       COUNT(*) AS sessions
+                FROM sessions WHERE first_timestamp >= ? AND first_timestamp < ?
+            """, (date_from.isoformat(), date_to.isoformat())).fetchone()
+        return dict(row) if row else {"tokens": 0, "api_cost": 0, "sessions": 0}
+
+    periods = []
+
+    # Period 0 — free plan (before billing start)
+    p0 = query_period(None, start)
+    if (p0["sessions"] or 0) > 0:
+        periods.append({
+            "period":     0,
+            "label":      "Free Plan",
+            "start":      None,
+            "end":        start.isoformat(),
+            "tokens":     p0["tokens"] or 0,
+            "api_cost":   round(p0["api_cost"] or 0, 2),
+            "sessions":   p0["sessions"] or 0,
+            "plan_cost":  None,
+            "savings":    None,
+        })
+
+    # Paid periods
+    period_num   = 1
+    period_start = start
+    while period_start <= today:
+        period_end = _add_months(period_start, 1)
+        is_current = period_end > today
+
+        if is_current:
+            data    = query_period(period_start, None)
+            label   = "Current Period"
+            end     = None
+            savings = None
+        else:
+            data    = query_period(period_start, period_end)
+            label   = f"Period {period_num}"
+            end     = period_end.isoformat()
+            savings = round((data["api_cost"] or 0) - plan_cost, 2) if plan_cost else None
+
+        # Skip empty completed periods — only show periods with actual usage
+        if not is_current and (data["sessions"] or 0) == 0:
+            period_start = period_end
+            period_num  += 1
+            continue
+
+        periods.append({
+            "period":     period_num,
+            "label":      label,
+            "start":      period_start.isoformat(),
+            "end":        end,
+            "tokens":     data["tokens"] or 0,
+            "api_cost":   round(data["api_cost"] or 0, 2),
+            "sessions":   data["sessions"] or 0,
+            "plan_cost":  plan_cost,
+            "savings":    savings,
+        })
+
+        if is_current:
+            break
+        period_start = period_end
+        period_num  += 1
+
+    conn.close()
+    return jsonify(periods)
+
+
 # ── Remote push (from other machines) ────────────────────────────────────────
 
 @app.post("/api/remote/push")
