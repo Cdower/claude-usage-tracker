@@ -23,10 +23,7 @@ agent_config.json:
 import json
 import os
 import glob
-import os
 import sys
-import sqlite3
-import socket
 import urllib.request
 import urllib.error
 from pathlib import Path

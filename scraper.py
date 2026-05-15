@@ -52,7 +52,8 @@ def _find_firefox_cookie_db():
             if not db.exists():
                 continue
             try:
-                tmp = tempfile.mktemp(suffix=".sqlite")
+                fd, tmp = tempfile.mkstemp(suffix=".sqlite")
+                os.close(fd)
                 shutil.copy2(db, tmp)
                 conn = sqlite3.connect(tmp)
                 names = {r[0] for r in conn.execute(
@@ -72,7 +73,8 @@ def _load_firefox_cookies():
     db = _find_firefox_cookie_db()
     if not db:
         return {}
-    tmp = tempfile.mktemp(suffix=".sqlite")
+    fd, tmp = tempfile.mkstemp(suffix=".sqlite")
+    os.close(fd)
     shutil.copy2(db, tmp)
     try:
         conn = sqlite3.connect(tmp)
@@ -231,13 +233,16 @@ def save_snapshot(usage_data):
     extra = usage_data.get("extra_usage")
     credit_balance = None
     if extra and extra.get("utilization") is not None:
+        # monthly_limit and used_credits are in cents (e.g. 2000 = $20.00)
+        used_usd  = (extra.get("used_credits",  0) or 0) / 100
+        limit_usd = (extra.get("monthly_limit", 0) or 0) / 100
         bars.append({
             "label": "Extra usage",
             "percentage": round(extra["utilization"], 1),
-            "resetInfo": f"${extra.get('used_credits', 0):.2f} of ${extra.get('monthly_limit', 0):.2f} used",
+            "resetInfo": f"${used_usd:.2f} of ${limit_usd:.2f} used",
         })
-        if extra.get("monthly_limit") and extra.get("used_credits") is not None:
-            credit_balance = extra["monthly_limit"] - extra["used_credits"]
+        if limit_usd > 0:
+            credit_balance = round(limit_usd - used_usd, 2)
 
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""

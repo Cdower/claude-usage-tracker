@@ -3,16 +3,17 @@ from flask_cors import CORS
 import sqlite3
 import json
 import os
-import secrets
+import hmac
+import calendar
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 from functools import wraps
 
 from scanner import scan, get_db, init_db, DB_PATH
 from scraper import is_authenticated, auth_browser, collect, fetch_usage
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["http://localhost:5000", "http://127.0.0.1:5000"])
 
 REMOTE_TOKEN = os.environ.get("REMOTE_TOKEN", "")
 
@@ -103,7 +104,7 @@ def require_token(f):
         if not REMOTE_TOKEN:
             return jsonify({"error": "REMOTE_TOKEN not set on hub"}), 500
         auth = request.headers.get("Authorization", "")
-        if auth != f"Bearer {REMOTE_TOKEN}":
+        if not hmac.compare_digest(auth, f"Bearer {REMOTE_TOKEN}"):
             return jsonify({"error": "Unauthorized"}), 401
         return f(*args, **kwargs)
     return decorated
@@ -157,21 +158,18 @@ def stats_summary():
 
     # Projected full-month cost based on days elapsed
     now = datetime.now()
-    days_in_month = (now.replace(month=now.month % 12 + 1, day=1) - timedelta(days=1)).day if now.month < 12 \
-                    else 31
+    days_in_month = calendar.monthrange(now.year, now.month)[1]
     days_elapsed = now.day + (now.hour / 24)
     fraction = days_elapsed / days_in_month
     monthly_cost = (monthly["api_cost"] or 0) if monthly else 0
     projected_cost = (monthly_cost / fraction) if fraction > 0 else 0
 
+    # Use last saved web-usage snapshot for plan — avoids a live HTTP call per page load
     plan_data = _get_setting("selected_plan")
-    detected_plan = None
-    if is_authenticated():
-        try:
-            usage = fetch_usage()
-            detected_plan = usage.get("detected_plan")
-        except Exception:
-            pass
+    snap = conn.execute(
+        "SELECT plan FROM web_usage_snapshots ORDER BY timestamp DESC LIMIT 1"
+    ).fetchone()
+    detected_plan = snap["plan"] if snap else None
     active_plan = detected_plan or plan_data
     plan_monthly = PLAN_DETAILS.get(active_plan, {}).get("monthly_usd", 0)
     projected_savings = plan_monthly - projected_cost
@@ -320,10 +318,12 @@ def remote_push():
     Accept sessions + turns from a remote agent.
     Body: { "machine": "laptop", "sessions": [...], "turns": [...] }
     """
+    if request.content_length and request.content_length > 10 * 1024 * 1024:
+        return jsonify({"error": "Payload too large"}), 413
     body = request.get_json(force=True)
-    machine = body.get("machine", "unknown")
-    sessions = body.get("sessions", [])
-    turns = body.get("turns", [])
+    machine = body.get("machine", "unknown")[:64]           # cap length
+    sessions = body.get("sessions", [])[:5_000]
+    turns    = body.get("turns",    [])[:50_000]
 
     conn = _db()
     inserted_sessions = 0
@@ -392,7 +392,7 @@ def remote_push():
     conn.close()
 
     return jsonify({
-        "machine": machine,
+        "machine": machine,  # noqa: echoes back the (already capped) value
         "sessions_received": len(sessions),
         "sessions_inserted": inserted_sessions,
         "turns_received": len(turns),
@@ -423,6 +423,7 @@ def index():
 
 
 if __name__ == "__main__":
-    host = os.environ.get("HOST", "0.0.0.0")
-    port = int(os.environ.get("PORT", 5000))
-    app.run(debug=True, host=host, port=port)
+    host  = os.environ.get("HOST", "0.0.0.0")
+    port  = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("FLASK_DEBUG", "0") == "1"
+    app.run(debug=debug, host=host, port=port)
