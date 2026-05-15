@@ -9,39 +9,62 @@ import sqlite3
 import shutil
 import tempfile
 import os
+import sys
 from pathlib import Path
 from datetime import datetime, timezone
 
 from curl_cffi import requests as cffi_requests
 
 DB_PATH = Path(__file__).parent / "usage.db"
-FIREFOX_PROFILES_DIR = Path.home() / "Library" / "Application Support" / "Firefox" / "Profiles"
 SESSION_COOKIE_NAMES = {"sessionKey", "sessionKeyLC", "__Secure-next-auth.session-token"}
+
+
+def _firefox_profiles_dirs():
+    """Return candidate Firefox profile directories for the current OS."""
+    if sys.platform == "darwin":
+        return [Path.home() / "Library" / "Application Support" / "Firefox" / "Profiles"]
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA", "")
+        return [Path(appdata) / "Mozilla" / "Firefox" / "Profiles"] if appdata else []
+    # Linux and other POSIX
+    return [
+        Path.home() / ".mozilla" / "firefox",
+        Path.home() / "snap" / "firefox" / "common" / ".mozilla" / "firefox",  # Ubuntu snap
+        Path("/var/lib/flatpak/app/org.mozilla.firefox")  # Flatpak (less common)
+    ]
 
 
 def _find_firefox_cookie_db():
     """Return the Firefox profile cookies.sqlite with claude.ai session cookies."""
-    if not FIREFOX_PROFILES_DIR.exists():
+    candidates = _firefox_profiles_dirs()
+    if not any(d.exists() for d in candidates):
         return None
     best, best_hits = None, 0
-    for profile_dir in FIREFOX_PROFILES_DIR.iterdir():
-        db = profile_dir / "cookies.sqlite"
-        if not db.exists():
+    for profiles_dir in candidates:
+        if not profiles_dir.exists():
             continue
         try:
-            tmp = tempfile.mktemp(suffix=".sqlite")
-            shutil.copy2(db, tmp)
-            conn = sqlite3.connect(tmp)
-            names = {r[0] for r in conn.execute(
-                "SELECT name FROM moz_cookies WHERE host LIKE '%claude.ai'"
-            ).fetchall()}
-            conn.close()
-            os.unlink(tmp)
-            hits = len(names & SESSION_COOKIE_NAMES)
-            if hits > best_hits:
-                best_hits, best = hits, db
-        except Exception:
+            entries = list(profiles_dir.iterdir())
+        except PermissionError:
             continue
+        for profile_dir in entries:
+            db = profile_dir / "cookies.sqlite"
+            if not db.exists():
+                continue
+            try:
+                tmp = tempfile.mktemp(suffix=".sqlite")
+                shutil.copy2(db, tmp)
+                conn = sqlite3.connect(tmp)
+                names = {r[0] for r in conn.execute(
+                    "SELECT name FROM moz_cookies WHERE host LIKE '%claude.ai'"
+                ).fetchall()}
+                conn.close()
+                os.unlink(tmp)
+                hits = len(names & SESSION_COOKIE_NAMES)
+                if hits > best_hits:
+                    best_hits, best = hits, db
+            except Exception:
+                continue
     return best
 
 

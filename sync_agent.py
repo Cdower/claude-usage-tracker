@@ -23,6 +23,8 @@ agent_config.json:
 import json
 import os
 import glob
+import os
+import sys
 import sqlite3
 import socket
 import urllib.request
@@ -36,7 +38,23 @@ from collections import defaultdict, Counter
 CONFIG_PATH = Path(__file__).parent / "agent_config.json"
 STATE_PATH  = Path(__file__).parent / ".agent_state.json"
 
-PROJECTS_DIR = Path.home() / ".claude" / "projects"
+
+def _claude_projects_dirs():
+    """Claude Code writes JSONL logs here, across all platforms."""
+    dirs = [Path.home() / ".claude" / "projects"]
+    if sys.platform == "darwin":
+        dirs.append(
+            Path.home() / "Library" / "Developer" / "Xcode"
+            / "CodingAssistant" / "ClaudeAgentConfig" / "projects"
+        )
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA", "")
+        if appdata:
+            dirs.append(Path(appdata) / "Claude" / "projects")
+    return dirs
+
+
+PROJECTS_DIRS = _claude_projects_dirs()
 
 MODEL_PRICING = {
     "claude-opus-4":    (15.00, 75.00),
@@ -265,9 +283,12 @@ def main():
     token        = cfg["token"]
     machine_name = cfg["machine_name"]
 
-    jsonl_files = sorted(glob.glob(str(PROJECTS_DIR / "**" / "*.jsonl"), recursive=True))
+    jsonl_files = sorted(
+        f for d in PROJECTS_DIRS
+        for f in glob.glob(str(d / "**" / "*.jsonl"), recursive=True)
+    )
     if not jsonl_files:
-        print(f"No JSONL files found in {PROJECTS_DIR}")
+        print(f"No JSONL files found in: {', '.join(str(d) for d in PROJECTS_DIRS)}")
         return
 
     all_sessions = {}   # session_id -> merged session dict
