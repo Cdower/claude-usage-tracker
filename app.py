@@ -96,6 +96,25 @@ def set_plan():
     return jsonify({"plan": plan, "details": PLAN_DETAILS[plan]})
 
 
+# ── Billing start date ────────────────────────────────────────────────────────
+
+@app.get("/api/settings/billing-start-date")
+def get_billing_start_date():
+    return jsonify({"billing_start_date": _get_setting("billing_start_date")})
+
+
+@app.post("/api/settings/billing-start-date")
+def set_billing_start_date():
+    body = request.get_json(force=True)
+    raw = (body.get("date") or "").strip()
+    try:
+        datetime.strptime(raw, "%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "invalid date, expected YYYY-MM-DD"}), 400
+    _set_setting("billing_start_date", raw)
+    return jsonify({"ok": True, "billing_start_date": raw})
+
+
 # ── Auth helpers ─────────────────────────────────────────────────────────────
 
 def require_token(f):
