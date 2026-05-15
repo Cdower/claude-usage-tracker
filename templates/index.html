@@ -110,6 +110,41 @@
     </table>
   </section>
 
+  <!-- Billing History -->
+  <section id="billingHistorySection">
+    <h2>Billing History <span class="section-note">from local logs</span></h2>
+
+    <!-- Shown when billing_start_date not yet configured -->
+    <div id="billingSetup" style="display:none">
+      <div class="billing-setup">
+        <label for="billingStartInput">Paid plan start date</label>
+        <input type="date" id="billingStartInput" />
+        <button class="btn btn-primary" id="billingStartSave">Save</button>
+        <span class="billing-setup-hint">Find this in Claude &rarr; Settings &rarr; Billing</span>
+      </div>
+    </div>
+
+    <!-- Shown once configured -->
+    <div id="billingTable" style="display:none">
+      <table class="plan-table">
+        <thead>
+          <tr>
+            <th>Period</th>
+            <th>Dates</th>
+            <th>Tokens</th>
+            <th>Est. API Cost</th>
+            <th>Plan Cost</th>
+            <th>Savings</th>
+          </tr>
+        </thead>
+        <tbody id="billingTableBody"></tbody>
+      </table>
+      <div style="margin-top:8px;text-align:right">
+        <a href="#" id="billingEditLink" style="font-size:12px;color:var(--muted)">Edit start date</a>
+      </div>
+    </div>
+  </section>
+
   <!-- Charts -->
   <section class="charts">
     <div class="chart-box">
