@@ -9,6 +9,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.6.0] — 2026-05-15
+
+### Added
+- **Billing History section** — per-billing-period breakdown of tokens, estimated API cost, plan cost, and savings; Period 0 covers pre-paid (free plan) usage; empty completed periods suppressed
+- **Billing start date banner** — prominent date input below the header prompts users to enter their first billing cycle date, with a hint to check Claude → Settings → Billing; collapses to a compact display once set
+- **Methodology & Sources section** — explains cache token accounting, plan vs. API comparison caveats, and links to the Anthropic pricing page and the May 2026 usage limits announcement
+
+### Fixed
+- `claude-opus-4-7` was priced at $15/MTok (old Opus 4.1 rate) instead of the correct $5/MTok — a 3x overcharge on all Opus 4.5/4.6/4.7 sessions
+- `claude-haiku-4-5` was priced at $0.80/MTok (Haiku 3.5 rate) instead of $1.00/MTok
+- Model pricing lookup used substring matching with shorter keys first, causing more-specific entries (e.g. `claude-opus-4-7`) to be shadowed by the generic `claude-opus-4` entry
+- `HOST` defaulted to `0.0.0.0` (LAN-visible); changed to `127.0.0.1` for safer out-of-box installs; `HOST=0.0.0.0` documents the opt-in for multi-machine use
+
+### Changed
+- All historical session costs automatically recalculated on first startup after the pricing fix (versioned via a `pricing_version` settings key — no manual migration needed)
+- Fine-print text (accuracy notice, limits note, methodology, footer disclaimer, section subtitles) increased by 1.5pt and set to full white for legibility
+- README pricing table corrected and expanded to include cache write/read columns; multi-machine sync section clarified to state that agent setup is required on each remote machine
+
+---
+
 ## [0.5.0] — 2026-05-15
 
 ### Security
