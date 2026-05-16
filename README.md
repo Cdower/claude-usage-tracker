@@ -17,7 +17,7 @@ Built for individual **Pro** and **Max** plan subscribers who want visibility in
 - **Plan vs. API cost comparison** — shows projected savings (or deficit) against Pro, Max 5×, and Max 20× simultaneously
 - **Usage limits table** — all quota windows (current session, all-models 7-day, extra usage) with % used, colour-coded bars, and reset countdowns
 - **Historical charts** — 30-day daily token and cost trends, model mix over time, top projects by token spend
-- **Multi-machine sync** — a lightweight push agent (zero external dependencies, stdlib only) syncs Claude Code logs from other machines to the hub
+- **Multi-machine sync** — a lightweight push agent (zero external dependencies, stdlib only) can sync Claude Code logs from other machines to the hub; requires manual setup on each remote machine (see [Multi-machine sync](#multi-machine-sync))
 - **Multi-browser support** — reads session cookies from Firefox, Chrome, Brave, Chromium, or Edge; no login window required
 - **Cross-platform** — macOS, Linux (including snap/Flatpak Firefox), and Windows
 
@@ -222,6 +222,8 @@ The "Est. API Cost" figure answers the hypothetical: *"What would this usage hav
 ---
 
 ## Multi-machine sync
+
+> **This does not happen automatically.** The hub only sees data from machines where you have manually installed and run `sync_agent.py`. Until you do that setup, the dashboard shows only the machine running the hub.
 
 The hub exposes `/api/remote/push` protected by a Bearer token. The `sync_agent.py` on each remote machine:
 
