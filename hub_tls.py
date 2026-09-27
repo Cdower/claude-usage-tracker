@@ -79,7 +79,7 @@ def _san_entries(names):
         try:
             entries.append(x509.IPAddress(ipaddress.ip_address(n)))
         except ValueError:
-            entries.append(x509.DNSName(n))
+            entries.append(x509.DNSName(n.lower()))
     return entries
 
 
@@ -192,9 +192,8 @@ def _server_cert_needs_renewal(cert_path, key_path, ca_cert, names):
         cert = _load_cert(cert_path)
     except Exception:
         return "unreadable"
-    if cert.issuer != ca_cert.subject:
-        return "issued by a different CA"
     try:
+        # Raises if the issuer name doesn't match the CA or the signature is bad.
         cert.verify_directly_issued_by(ca_cert)
     except Exception:
         return "not signed by the current CA"
@@ -204,15 +203,7 @@ def _server_cert_needs_renewal(cert_path, key_path, ca_cert, names):
         san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
     except x509.ExtensionNotFound:
         return "no subjectAltName"
-    have = {str(v).lower() for v in san.get_values_for_type(x509.DNSName)}
-    have |= {str(v) for v in san.get_values_for_type(x509.IPAddress)}
-    want = set()
-    for n in names:
-        try:
-            want.add(str(ipaddress.ip_address(n)))
-        except ValueError:
-            want.add(n.lower())
-    if have != want:
+    if set(san) != set(_san_entries(names)):
         return "hostnames changed"
     return None
 
@@ -248,8 +239,7 @@ def ensure_self_signed(cert_dir=None, log=print):
 
 def ca_fingerprint(ca_cert_path):
     from cryptography.hazmat.primitives import hashes
-    fp = _load_cert(ca_cert_path).fingerprint(hashes.SHA256()).hex().upper()
-    return ":".join(fp[i:i + 2] for i in range(0, len(fp), 2))
+    return _load_cert(ca_cert_path).fingerprint(hashes.SHA256()).hex(":").upper()
 
 
 def _server_context(cert_file, key_file):
@@ -277,9 +267,6 @@ def server_ssl_context(log=print):
         key_file = os.environ.get("TLS_KEY_FILE", "").strip()
         if not cert_file or not key_file:
             raise TLSConfigError("TLS_MODE=custom requires TLS_CERT_FILE and TLS_KEY_FILE")
-        for f in (cert_file, key_file):
-            if not Path(f).is_file():
-                raise TLSConfigError(f"file not found: {f}")
         log(f"TLS: serving certificate {cert_file}")
         return _server_context(cert_file, key_file)
 

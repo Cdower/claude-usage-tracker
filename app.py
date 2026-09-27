@@ -32,27 +32,15 @@ def _db():
     return conn
 
 
-def _ensure_settings_table(conn):
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS settings (
-            key   TEXT PRIMARY KEY,
-            value TEXT
-        )
-    """)
-    conn.commit()
-
-
 @app.before_request
 def ensure_db():
     conn = get_db()
     init_db(conn)
-    _ensure_settings_table(conn)
     conn.close()
 
 
 def _get_setting(key, default=None):
     conn = _db()
-    _ensure_settings_table(conn)
     row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
     conn.close()
     return row["value"] if row else default
@@ -60,7 +48,6 @@ def _get_setting(key, default=None):
 
 def _set_setting(key, value):
     conn = _db()
-    _ensure_settings_table(conn)
     conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
     conn.commit()
     conn.close()
