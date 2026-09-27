@@ -9,3 +9,7 @@ env/
 .vscode/
 .idea/
 .DS_Store
+.venv/
+certs/
+agent_config.json
+.agent_state.json

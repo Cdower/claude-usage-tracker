@@ -1,5 +1,6 @@
 {
-  "hub_url": "http://YOUR_DESKTOP_IP:5000",
+  "hub_url": "https://YOUR_HUB_HOST:5000",
   "token": "paste REMOTE_TOKEN from hub .env here",
-  "machine_name": "laptop"
+  "machine_name": "laptop",
+  "ca_cert": "ca.pem"
 }

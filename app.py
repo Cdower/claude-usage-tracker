@@ -11,9 +11,16 @@ from functools import wraps
 
 from scanner import scan, get_db, init_db, DB_PATH
 from scraper import is_authenticated, auth_browser, collect, fetch_usage
+from hub_tls import tls_mode, server_ssl_context, TLSConfigError
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:5000", "http://127.0.0.1:5000"])
+
+try:
+    _SCHEME = "http" if tls_mode() == "off" else "https"
+except TLSConfigError as e:
+    raise SystemExit(f"TLS configuration error: {e}")
+_PORT = int(os.environ.get("PORT", 5000))
+CORS(app, origins=[f"{_SCHEME}://localhost:{_PORT}", f"{_SCHEME}://127.0.0.1:{_PORT}"])
 
 REMOTE_TOKEN = os.environ.get("REMOTE_TOKEN", "")
 
@@ -594,6 +601,9 @@ def index():
 
 if __name__ == "__main__":
     host  = os.environ.get("HOST", "127.0.0.1")
-    port  = int(os.environ.get("PORT", 5000))
     debug = os.environ.get("FLASK_DEBUG", "0") == "1"
-    app.run(debug=debug, host=host, port=port)
+    try:
+        ssl_context = server_ssl_context()
+    except TLSConfigError as e:
+        raise SystemExit(f"TLS configuration error: {e}")
+    app.run(debug=debug, host=host, port=_PORT, ssl_context=ssl_context)
