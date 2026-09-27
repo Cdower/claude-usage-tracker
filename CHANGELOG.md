@@ -9,6 +9,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.7.0] — 2026-09-27
+
+### Added
+- **TLS for the hub** — `TLS_MODE=self-signed` generates a private CA and server certificate (reused across restarts, server cert re-issued on expiry or hostname change); `TLS_MODE=custom` serves an externally managed certificate from `TLS_CERT_FILE` / `TLS_KEY_FILE`. With TLS on the hub serves HTTPS only; `TLS_MODE=off` (default) keeps plain HTTP
+- **Sync agent `ca_cert` option** — verifies a self-signed hub against its CA certificate; certificates and hostnames are always verified. The agent warns when pushing over plain HTTP to a non-local hub
+- `REMOTE_TOKEN` and TLS settings documented in `.env.example`
+
+### Changed
+- Dependencies managed with uv: exact pins in `pyproject.toml`, hashes in `uv.lock`, `run.sh` uses `uv run --locked`; `requirements.txt` is now a hash-pinned export for `pip install --require-hashes`
+- Upgraded Flask 3.0.0 → 3.1.3 (fixes CVE-2026-27205) and Flask-CORS 4.0.0 → 6.0.5 (fixes CVE-2024-1681, CVE-2024-6221, CVE-2024-6839, CVE-2024-6844, CVE-2024-6866); curl_cffi pinned to 0.16.3, browser-cookie3 to 0.20.1
+- Removed unused `python-dotenv` dependency (`run.sh` loads `.env` itself)
+- CORS origins follow the configured scheme and port
+
+### Security
+- Chart.js script tag carries a Subresource Integrity hash (verified against the npm registry tarball)
+- Temporary copies of the Firefox cookie database are always deleted, including when the copy or query fails (previously a failed query left a full copy of the cookie DB in the temp directory)
+
+### Fixed
+- Fresh installs returned HTTP 500 on every request: cost recalculation read the `settings` table before it was created
+
+---
+
 ## [0.6.0] — 2026-05-15
 
 ### Added

@@ -14,16 +14,23 @@ Setup:
 
 agent_config.json:
   {
-    "hub_url": "http://192.168.1.10:5000",
+    "hub_url": "https://192.168.1.10:5000",
     "token": "<paste REMOTE_TOKEN from hub .env>",
-    "machine_name": "laptop"
+    "machine_name": "laptop",
+    "ca_cert": "ca.pem"
   }
+
+  ca_cert is optional: the path (absolute, or relative to this script) to the
+  hub's CA certificate when the hub runs with TLS_MODE=self-signed. Omit it when
+  the hub uses a publicly trusted certificate or plain HTTP.
 """
 
 import json
 import os
 import glob
+import ssl
 import sys
+import urllib.parse
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -72,7 +79,35 @@ def load_config():
         if not cfg.get(key):
             print(f"ERROR: '{key}' missing from {CONFIG_PATH}")
             raise SystemExit(1)
+    if cfg.get("ca_cert"):
+        ca = Path(cfg["ca_cert"]).expanduser()
+        if not ca.is_absolute():
+            ca = CONFIG_PATH.parent / ca
+        if not ca.is_file():
+            print(f"ERROR: ca_cert '{ca}' not found")
+            raise SystemExit(1)
+        cfg["ca_cert"] = str(ca)
     return cfg
+
+
+def ssl_context_for(hub_url, ca_cert=None):
+    """
+    Return the SSL context used to reach the hub, or None for plain HTTP.
+    Certificates are always verified: against ca_cert when given (self-signed
+    hub), otherwise against the system trust store.
+    """
+    parsed = urllib.parse.urlparse(hub_url)
+    if parsed.scheme == "https":
+        return ssl.create_default_context(cafile=ca_cert)
+    if parsed.scheme != "http":
+        print(f"ERROR: hub_url must start with http:// or https:// (got '{hub_url}')")
+        raise SystemExit(1)
+    if ca_cert:
+        print("ERROR: ca_cert is set but hub_url uses http:// — change it to https://")
+        raise SystemExit(1)
+    if parsed.hostname not in ("localhost", "127.0.0.1", "::1"):
+        print("WARNING: hub_url uses plain HTTP; the token and usage data are sent unencrypted.")
+    return None
 
 
 def load_state():
@@ -246,7 +281,7 @@ def aggregate(session_metas, turns):
 
 # ── Push to hub ───────────────────────────────────────────────────────────────
 
-def push(hub_url, token, machine_name, sessions, turns):
+def push(hub_url, token, machine_name, sessions, turns, ssl_context=None):
     payload = json.dumps({
         "machine": machine_name,
         "sessions": sessions,
@@ -263,7 +298,7 @@ def push(hub_url, token, machine_name, sessions, turns):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=30, context=ssl_context) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         body = e.read().decode()
@@ -279,6 +314,7 @@ def main():
     hub_url      = cfg["hub_url"]
     token        = cfg["token"]
     machine_name = cfg["machine_name"]
+    ssl_context  = ssl_context_for(hub_url, cfg.get("ca_cert"))
 
     jsonl_files = sorted(
         f for d in PROJECTS_DIRS
@@ -337,7 +373,7 @@ def main():
     print(f"Pushing {len(sessions_list)} sessions, {len(all_turns)} turns → {hub_url} ...")
 
     try:
-        result = push(hub_url, token, machine_name, sessions_list, all_turns)
+        result = push(hub_url, token, machine_name, sessions_list, all_turns, ssl_context)
         print(f"✓ {result}")
         save_state(state)
     except Exception as e:

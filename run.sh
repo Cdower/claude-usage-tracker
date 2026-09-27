@@ -1,5 +1,6 @@
 #!/bin/bash
 cd "$(dirname "$0")"
-source venv/bin/activate
 set -a; [ -f .env ] && source .env; set +a
-python app.py
+# --locked: refuse to run if uv.lock is out of date with pyproject.toml.
+# Packages are installed from uv.lock with hash verification.
+exec uv run --locked python app.py
