@@ -38,6 +38,25 @@ def _firefox_profiles_dirs():
     ]
 
 
+def _query_cookie_db_copy(db, sql):
+    """
+    Run a read-only query against a private copy of a Firefox cookie DB.
+
+    Firefox holds a lock on cookies.sqlite while running, so we query a copy.
+    The copy contains every cookie in the profile, so it lives in a private
+    (0700) temp directory that is always removed — even if the copy or the
+    query fails partway through.
+    """
+    with tempfile.TemporaryDirectory(prefix="cut-cookies-") as tmpdir:
+        tmp = os.path.join(tmpdir, "cookies.sqlite")
+        shutil.copy2(db, tmp)
+        conn = sqlite3.connect(tmp)
+        try:
+            return conn.execute(sql).fetchall()
+        finally:
+            conn.close()
+
+
 def _find_firefox_cookie_db():
     best, best_hits = None, 0
     for profiles_dir in _firefox_profiles_dirs():
@@ -52,15 +71,9 @@ def _find_firefox_cookie_db():
             if not db.exists():
                 continue
             try:
-                fd, tmp = tempfile.mkstemp(suffix=".sqlite")
-                os.close(fd)
-                shutil.copy2(db, tmp)
-                conn = sqlite3.connect(tmp)
-                names = {r[0] for r in conn.execute(
-                    "SELECT name FROM moz_cookies WHERE host LIKE '%claude.ai'"
-                ).fetchall()}
-                conn.close()
-                os.unlink(tmp)
+                names = {r[0] for r in _query_cookie_db_copy(
+                    db, "SELECT name FROM moz_cookies WHERE host LIKE '%claude.ai'"
+                )}
                 hits = len(names & SESSION_COOKIE_NAMES)
                 if hits > best_hits:
                     best_hits, best = hits, db
@@ -73,17 +86,12 @@ def _load_firefox_cookies():
     db = _find_firefox_cookie_db()
     if not db:
         return {}
-    fd, tmp = tempfile.mkstemp(suffix=".sqlite")
-    os.close(fd)
-    shutil.copy2(db, tmp)
     try:
-        conn = sqlite3.connect(tmp)
-        rows = conn.execute(
-            "SELECT name, value FROM moz_cookies WHERE host LIKE '%claude.ai'"
-        ).fetchall()
-        conn.close()
-    finally:
-        os.unlink(tmp)
+        rows = _query_cookie_db_copy(
+            db, "SELECT name, value FROM moz_cookies WHERE host LIKE '%claude.ai'"
+        )
+    except Exception:
+        return {}
     return {name: value for name, value in rows}
 
 

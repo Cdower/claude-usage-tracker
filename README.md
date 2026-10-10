@@ -89,22 +89,23 @@ This answers: *"At my current pace, would the API be cheaper than my subscriptio
 ### Hub machine (desktop)
 
 ```bash
-git clone https://github.com/jimdawdy-hub/claude-usage-tracker.git
+git clone https://github.com/Cdower/claude-usage-tracker.git
 cd claude-usage-tracker
 
-# Create virtual environment with Python 3.11
-python3.11 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+# Dependencies are pinned in uv.lock with hashes. Install uv first:
+#   https://docs.astral.sh/uv/getting-started/installation/
+cp .env.example .env
 
-# Generate a shared secret for remote agents
-python3 -c "import secrets; print('REMOTE_TOKEN=' + secrets.token_hex(32))" >> .env
+# Generate a shared secret for remote agents and paste it into REMOTE_TOKEN in .env
+python3 -c "import secrets; print(secrets.token_hex(32))"
 
-# Start the hub
+# Start the hub (uv creates .venv from uv.lock on first run)
 ./run.sh
 ```
 
-Open **http://localhost:5000** in your browser.
+Open **http://localhost:5000** in your browser (**https://** if TLS is enabled — see [TLS](#tls)).
+
+Without uv, `pip install --require-hashes -r requirements.txt` installs the same pinned, hash-verified set. `requirements.txt` is generated with `uv export --format requirements-txt --no-emit-project`; regenerate it whenever `uv.lock` changes.
 
 Click **Sync Now** to pull your local JSONL data and fetch live usage from claude.ai. The app automatically finds your browser session — no login step required as long as you're already signed into claude.ai in any supported browser.
 
@@ -113,16 +114,17 @@ Click **Sync Now** to pull your local JSONL data and fetch live usage from claud
 No virtual environment or pip installs needed — `sync_agent.py` uses only the Python standard library.
 
 ```bash
-# Copy just the agent script to the remote machine
-scp sync_agent.py user@laptop:~/claude-usage-tracker/
+# Copy the agent script (and, for a self-signed hub, its CA certificate)
+ssh user@laptop mkdir -p ~/claude-usage-tracker
+scp sync_agent.py certs/ca.pem user@laptop:~/claude-usage-tracker/
 
 # Create the agent config on the remote machine
-mkdir -p ~/claude-usage-tracker
 cat > ~/claude-usage-tracker/agent_config.json << 'EOF'
 {
-  "hub_url": "http://YOUR_DESKTOP_IP:5000",
+  "hub_url": "https://YOUR_HUB_HOST:5000",
   "token": "paste REMOTE_TOKEN from hub .env here",
-  "machine_name": "laptop"
+  "machine_name": "laptop",
+  "ca_cert": "ca.pem"
 }
 EOF
 
@@ -141,20 +143,49 @@ python3 ~/claude-usage-tracker/sync_agent.py
 
 ```env
 REMOTE_TOKEN=<hex secret shared with all agents>
-HOST=0.0.0.0      # bind address (default: 0.0.0.0 — use 127.0.0.1 for single machine)
+HOST=0.0.0.0       # bind address (default: 127.0.0.1 — use 0.0.0.0 for multi-machine sync)
 PORT=5000          # port (default: 5000)
 FLASK_DEBUG=0      # set to 1 during development only
+
+TLS_MODE=off       # off | self-signed | custom (see TLS below)
+TLS_HOSTNAMES=     # self-signed: extra names/IPs agents use to reach the hub
+TLS_CERT_DIR=      # self-signed: where certificates are kept (default ./certs)
+TLS_CERT_FILE=     # custom: PEM certificate chain
+TLS_KEY_FILE=      # custom: PEM private key
 ```
+
+### TLS
+
+With `TLS_MODE` set to `self-signed` or `custom` the hub serves **HTTPS only** on `PORT`; plain HTTP is not served. The default, `TLS_MODE=off`, keeps plain HTTP. A TLS misconfiguration stops the hub at startup; it never silently falls back to HTTP.
+
+**Self-signed (`TLS_MODE=self-signed`)** — on first start the hub creates a private CA and a server certificate signed by it in `certs/`:
+
+| File | Purpose |
+|------|---------|
+| `certs/ca.pem` | CA certificate — copy to each sync agent (`ca_cert`) and optionally trust it in your browser |
+| `certs/ca-key.pem` | CA private key (mode 0600) — never copy this off the hub |
+| `certs/server.pem`, `certs/server-key.pem` | Server certificate and key (valid 397 days) |
+
+The server certificate covers `localhost`, `127.0.0.1`, `::1`, the hub's hostname, and everything in `TLS_HOSTNAMES` — set that to the name or IP your agents put in `hub_url`, e.g. `TLS_HOSTNAMES=hub.lan,192.168.1.10`. The CA is kept across restarts; the server certificate is re-issued automatically when it is within 30 days of expiry or `TLS_HOSTNAMES` changes, so agents never need a new `ca.pem`. The hub prints the CA's SHA-256 fingerprint at startup so you can check the copy on each agent (`openssl x509 -in ca.pem -noout -fingerprint -sha256`). Run `uv run python hub_tls.py` to create or refresh the certificates without starting the hub.
+
+Anyone holding `ca-key.pem` can issue certificates your agents (and your browser, if you trusted the CA) will accept, so keep it on the hub only. Delete `certs/` to start over with a new CA.
+
+**Externally managed certificate (`TLS_MODE=custom`)** — point `TLS_CERT_FILE` (full chain, PEM) and `TLS_KEY_FILE` (PEM) at a certificate you manage yourself, e.g. from Let's Encrypt or an internal CA. Leave `ca_cert` out of the agent config when the certificate chains to a CA the agent machine already trusts; otherwise set `ca_cert` to your CA certificate. Restart the hub after renewing the certificate.
+
+Agents always verify the hub's certificate and hostname. The agent prints a warning when `hub_url` uses plain `http://` to anything other than localhost.
 
 ### Agent `agent_config.json`
 
 ```json
 {
-  "hub_url": "http://192.168.1.10:5000",
+  "hub_url": "https://192.168.1.10:5000",
   "token": "<same REMOTE_TOKEN from hub>",
-  "machine_name": "laptop"
+  "machine_name": "laptop",
+  "ca_cert": "ca.pem"
 }
 ```
+
+`ca_cert` is optional — the path (absolute, or relative to `sync_agent.py`) to the hub's CA certificate for a self-signed hub. Omit it for a publicly trusted certificate or a plain-HTTP hub.
 
 ---
 
@@ -253,11 +284,16 @@ This project is designed for personal, local-network use. The following hardenin
 **Authentication & transport**
 - The remote push endpoint requires a cryptographically random Bearer token (`REMOTE_TOKEN`). Generate one with `python3 -c "import secrets; print(secrets.token_hex(32))"` and keep it out of version control.
 - Token verification uses a constant-time comparison to resist timing-based inference.
-- The hub binds to `0.0.0.0` by default so remote agents can reach it on the local network. Set `HOST=127.0.0.1` in `.env` if you only run one machine.
+- The hub binds to `127.0.0.1` by default. Set `HOST=0.0.0.0` in `.env` so remote agents can reach it.
+- Traffic between agents and the hub can be encrypted with TLS (`TLS_MODE=self-signed` or `custom`; see [TLS](#tls)). Agents verify the hub's certificate and hostname. Enable TLS whenever agents reach the hub over a network, otherwise the token and usage data travel in clear text.
 
 **Browser cookie access**
 - Cookie reading is read-only and entirely local — no credentials are stored by this app or transmitted anywhere beyond claude.ai itself.
-- Temporary copies of the browser cookie database are created securely and deleted immediately after reading.
+- Temporary copies of the browser cookie database are made in a private (0700) temporary directory that is always removed, including when reading fails.
+
+**Supply chain**
+- Python dependencies are pinned to exact versions in `pyproject.toml` and locked with hashes in `uv.lock`; `run.sh` uses `uv run --locked`, which refuses to run if the lock is out of date. `requirements.txt` carries the same hashes for `pip install --require-hashes`.
+- Chart.js is loaded from jsDelivr with a Subresource Integrity (SRI) hash, so the browser refuses to run it if the file served differs from the published `chart.js@4.4.0` release.
 
 **Input handling**
 - Incoming push payloads are bounded by size and record count to prevent resource exhaustion.
@@ -265,7 +301,7 @@ This project is designed for personal, local-network use. The following hardenin
 - API responses are restricted to same-origin requests.
 
 **What this tool is not**
-This is a personal dashboard, not a hardened public web service. Do not expose port 5000 to the internet. If you need remote access from outside your local network, put it behind a reverse proxy with TLS and authentication (e.g. nginx + Let's Encrypt + HTTP basic auth).
+This is a personal dashboard, not a hardened public web service. Do not expose port 5000 to the internet. TLS encrypts traffic but the dashboard itself has no login: anyone who can reach the port can view it. If you need access from outside your local network, put it behind a reverse proxy with authentication (e.g. nginx + HTTP basic auth) or a VPN.
 
 ---
 
@@ -276,8 +312,11 @@ claude-usage-tracker/
 ├── app.py                     # Flask hub — API endpoints
 ├── scanner.py                 # JSONL log parser (incremental, deduped)
 ├── scraper.py                 # claude.ai usage API client (browser cookie auth)
+├── hub_tls.py                 # TLS setup: self-signed CA / external certificate
 ├── sync_agent.py              # Standalone push agent for remote machines
-├── requirements.txt           # Hub dependencies (Flask, curl_cffi, browser-cookie3)
+├── pyproject.toml             # Hub dependencies (exact pins)
+├── uv.lock                    # Locked dependency tree with hashes
+├── requirements.txt           # Hash-pinned export of uv.lock for pip
 ├── run.sh                     # Start the hub
 ├── agent_config.example.json
 ├── .env.example
