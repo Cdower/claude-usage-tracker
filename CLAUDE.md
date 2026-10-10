@@ -18,7 +18,7 @@ Dependencies are managed with uv: exact pins in `pyproject.toml`, hashes in `uv.
 
 There is no test suite, linter config, or build step. Frontend is plain JS/CSS served by Flask (no bundler); the Chart.js `<script>` tag carries an SRI hash that must be updated if the version changes.
 
-Env vars read by the hub: `REMOTE_TOKEN`, `HOST` (default `127.0.0.1`), `PORT` (default 5000), `FLASK_DEBUG`, and `TLS_MODE` (`off` | `self-signed` | `custom`) with `TLS_HOSTNAMES`, `TLS_CERT_DIR`, `TLS_CERT_FILE`, `TLS_KEY_FILE`. `.env.example` still contains stale unused keys (`ANTHROPIC_ADMIN_API_KEY`, `CLAUDE_PLAN`, `MONTHLY_TOKEN_LIMIT`).
+Env vars read by the hub: `REMOTE_TOKEN`, `HOST` (default `127.0.0.1`), `PORT` (default 5000), `FLASK_DEBUG`, and `TLS_MODE` (`off` | `self-signed` | `custom`) with `TLS_HOSTNAMES`, `TLS_CERT_DIR`, `TLS_CERT_FILE`, `TLS_KEY_FILE`.
 
 ## Architecture
 
@@ -33,7 +33,7 @@ Hub-and-agent design around a single SQLite file, `usage.db` (repo root, git-ign
 
 ### Things that must stay in sync
 
-- **Pricing** is duplicated in `scanner.py` and `sync_agent.py`. `MODEL_PRICING` uses substring matching in dict order, so more-specific keys (e.g. `claude-opus-4-7`) must come before generic ones (`claude-opus-4`). The agent's table is currently stale (old Opus/Haiku rates); remote-pushed costs are trusted as sent until the next repricing.
+- **Pricing** is duplicated in `scanner.py` and `sync_agent.py`. `MODEL_PRICING` uses substring matching in dict order, so more-specific keys (e.g. `claude-opus-4-7`) must come before generic ones (`claude-opus-4`). The hub ignores agent-sent costs and reprices pushed turns with `scanner._estimate_cost`, so the agent's table only matters for its own output, but keep both identical.
 - **Repricing**: after changing `MODEL_PRICING`, bump `PRICING_VERSION` inside `recalculate_all_costs` (`scanner.py`); on next startup all turn/session costs are recomputed from stored token counts.
 - **Schema changes**: add columns via the try-`SELECT`/`except OperationalError`/`ALTER TABLE` pattern in `init_db`; remote push SQL in `app.py` must match.
 - The README's pricing table, API endpoint table, and `CHANGELOG.md` (Keep a Changelog format) are user-facing docs updated alongside code changes.

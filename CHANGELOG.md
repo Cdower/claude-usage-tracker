@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- `sync_agent.py` still priced Opus 4.5+ at $15/$75 and Haiku 4.5 at $0.80/$4, overstating costs from remote machines; its table now matches the hub's
+- The hub now prices pushed turns itself from token counts instead of trusting the cost sent by the agent, so agents that haven't been updated can't report wrong costs
+- Costs already stored are recalculated on first startup (pricing version bumped)
+
+### Removed
+- Unused `ANTHROPIC_ADMIN_API_KEY`, `CLAUDE_PLAN` and `MONTHLY_TOKEN_LIMIT` from `.env.example`
+
 ---
 
 ## [0.7.0] — 2026-09-27
