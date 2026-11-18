@@ -8,6 +8,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Fixed
+- Remote pushes overwrote a session's token totals, cost and turn count with the latest batch only (the sync agent parses incrementally and sends per-batch deltas); the hub now recomputes each pushed session's totals from its stored turns
 - `sync_agent.py` still priced Opus 4.5+ at $15/$75 and Haiku 4.5 at $0.80/$4, overstating costs from remote machines; its table now matches the hub's
 - The hub now prices pushed turns itself from token counts instead of trusting the cost sent by the agent, so agents that haven't been updated can't report wrong costs
 - Costs already stored are recalculated on first startup (pricing version bumped)
