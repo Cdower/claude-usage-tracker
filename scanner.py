@@ -169,7 +169,7 @@ def recalculate_all_costs(conn):
     """Recompute estimated_api_cost for every turn and session using current MODEL_PRICING.
     Called automatically when the pricing version in settings doesn't match PRICING_VERSION.
     """
-    PRICING_VERSION = "2026-05-15-v2"
+    PRICING_VERSION = "2026-10-10-v3"
     row = conn.execute("SELECT value FROM settings WHERE key='pricing_version'").fetchone()
     if row and row["value"] == PRICING_VERSION:
         return

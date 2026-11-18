@@ -60,10 +60,25 @@ def _claude_projects_dirs():
 
 PROJECTS_DIRS = _claude_projects_dirs()
 
+# Pricing per million tokens (input / output) as of May 2026 — keep identical to MODEL_PRICING in scanner.py.
+# Keys must be ordered most-specific first — matching uses substring search.
+# Opus 4.1 and deprecated Opus 4 are $15/$75; Opus 4.5+ dropped to $5/$25.
 MODEL_PRICING = {
-    "claude-opus-4":    (15.00, 75.00),
-    "claude-sonnet-4":  (3.00,  15.00),
-    "claude-haiku-4":   (0.80,  4.00),
+    # Opus 4.5 / 4.6 / 4.7: $5 input, $25 output
+    "claude-opus-4-7": (5.00, 25.00),
+    "claude-opus-4-6": (5.00, 25.00),
+    "claude-opus-4-5": (5.00, 25.00),
+    # Opus 4.1 and deprecated Opus 4: $15 input, $75 output
+    "claude-opus-4-1": (15.00, 75.00),
+    "claude-opus-4":   (15.00, 75.00),
+    # Sonnet 4.x: $3 input, $15 output
+    "claude-sonnet-4": (3.00, 15.00),
+    # Haiku 4.5: $1 input, $5 output
+    "claude-haiku-4-5": (1.00, 5.00),
+    # Haiku 4.x fallback: $1 input, $5 output
+    "claude-haiku-4":   (1.00, 5.00),
+    # Haiku 3.5 (retired): $0.80 input, $4 output
+    "claude-haiku-3-5": (0.80, 4.00),
 }
 
 MODEL_PRIORITY = {"opus": 3, "sonnet": 2, "haiku": 1}
