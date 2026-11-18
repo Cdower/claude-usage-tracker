@@ -9,7 +9,7 @@ from pathlib import Path
 from datetime import datetime
 from functools import wraps
 
-from scanner import scan, get_db, init_db, DB_PATH
+from scanner import scan, get_db, init_db, DB_PATH, _estimate_cost
 from scraper import is_authenticated, auth_browser, collect, fetch_usage
 from hub_tls import tls_mode, server_ssl_context, TLSConfigError
 
@@ -547,7 +547,12 @@ def remote_push():
             t.get("input_tokens", 0), t.get("output_tokens", 0),
             t.get("cache_read_tokens", 0), t.get("cache_creation_tokens", 0),
             t.get("tool_name"), t.get("cwd"), t.get("message_id", ""),
-            t.get("estimated_api_cost", 0)
+            # Price with the hub's table; agents may run outdated pricing.
+            _estimate_cost(
+                t.get("model"),
+                t.get("input_tokens") or 0, t.get("output_tokens") or 0,
+                t.get("cache_read_tokens") or 0, t.get("cache_creation_tokens") or 0,
+            )
         ))
         if cur.rowcount:
             inserted_turns += 1
