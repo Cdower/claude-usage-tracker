@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- Remote pushes overwrote a session's token totals, cost and turn count with the latest batch only (the sync agent parses incrementally and sends per-batch deltas); the hub now recomputes each pushed session's totals from its stored turns
+
 ---
 
 ## [0.7.0] — 2026-09-27

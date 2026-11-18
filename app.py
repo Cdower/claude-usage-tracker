@@ -552,6 +552,21 @@ def remote_push():
         if cur.rowcount:
             inserted_turns += 1
 
+    # Agents parse incrementally and push per-batch deltas, so rebuild totals
+    # from the stored turns rather than trusting the pushed session values.
+    session_ids = {s["session_id"] for s in sessions} | {t["session_id"] for t in turns}
+    for sid in session_ids:
+        conn.execute("""
+            UPDATE sessions SET
+                total_input_tokens = COALESCE((SELECT SUM(input_tokens) FROM turns WHERE turns.session_id = sessions.session_id), 0),
+                total_output_tokens = COALESCE((SELECT SUM(output_tokens) FROM turns WHERE turns.session_id = sessions.session_id), 0),
+                total_cache_read = COALESCE((SELECT SUM(cache_read_tokens) FROM turns WHERE turns.session_id = sessions.session_id), 0),
+                total_cache_creation = COALESCE((SELECT SUM(cache_creation_tokens) FROM turns WHERE turns.session_id = sessions.session_id), 0),
+                estimated_api_cost = COALESCE((SELECT SUM(estimated_api_cost) FROM turns WHERE turns.session_id = sessions.session_id), 0),
+                turn_count = COALESCE((SELECT COUNT(*) FROM turns WHERE turns.session_id = sessions.session_id), 0)
+            WHERE session_id = ?
+        """, (sid,))
+
     conn.commit()
     conn.close()
 
